@@ -261,12 +261,37 @@ if [ "$NEED_ROOT" -eq 1 ] && [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-# Créer le répertoire d'extraction
+# Gestion du répertoire d'extraction - CORRIGÉ
 if [ -z "$EXTRACT_DIR" ]; then
     EXTRACT_DIR=$(mktemp -d)
+    echo -e "  ${BLUE}${BOLD}→${RESET} Répertoire d'extraction temporaire créé: $EXTRACT_DIR"
+else
+    # S'assurer que le chemin est absolu
+    if [[ "$EXTRACT_DIR" != /* ]]; then
+        EXTRACT_DIR="$(pwd)/$EXTRACT_DIR"
+    fi
+    
+    # Créer le répertoire s'il n'existe pas
+    if [ ! -d "$EXTRACT_DIR" ]; then
+        mkdir -p "$EXTRACT_DIR"
+        if [ $? -ne 0 ]; then
+            echo -e "  ${RED}${BOLD}✗${RESET} Impossible de créer le répertoire d'extraction: $EXTRACT_DIR"
+            exit 1
+        fi
+        echo -e "  ${BLUE}${BOLD}→${RESET} Répertoire d'extraction créé: $EXTRACT_DIR"
+    fi
+    
+    # Vérifier les permissions
+    if [ ! -w "$EXTRACT_DIR" ]; then
+        echo -e "  ${RED}${BOLD}✗${RESET} Permissions insuffisantes sur le répertoire: $EXTRACT_DIR"
+        exit 1
+    fi
 fi
 
-# Vérifier la version si c'est activé et que ce n'est pas désactivé par l'option
+[ "$DEBUG" -eq 1 ] && echo -e "  ${BLUE}${BOLD}→${RESET} Extraction dans: $EXTRACT_DIR"
+
+
+# Vérifier la version - CORRIGÉ
 if [ "$VERSION_CHECK" -eq 1 ] && [ -n "$VERSION_URL" ] && [ "$EXTRACT_ONLY" -eq 0 ] && [ "$SKIP_VERSION_CHECK" -eq 0 ]; then
     echo -e "  ${BLUE}${BOLD}→${RESET} Vérification des mises à jour..."
     [ "$DEBUG" -eq 1 ] && echo -e "  ${BLUE}${BOLD}→${RESET} Version locale : $VERSION"
@@ -294,7 +319,8 @@ if [ "$VERSION_CHECK" -eq 1 ] && [ -n "$VERSION_URL" ] && [ "$EXTRACT_ONLY" -eq 
                     if [ -n "$remote_url" ]; then
                         echo -e "  ${BLUE}${BOLD}→${RESET} URL de téléchargement : $remote_url"
                     fi
-                    exit 1
+                    # Ne pas quitter, simplement notifier
+                    echo -e "  ${YELLOW}${BOLD}⚠${RESET} Poursuite avec la version actuelle"
                 else
                     echo -e "  ${GREEN}${BOLD}✓${RESET} Version à jour ($VERSION)"
                 fi
@@ -303,14 +329,72 @@ if [ "$VERSION_CHECK" -eq 1 ] && [ -n "$VERSION_URL" ] && [ "$EXTRACT_ONLY" -eq 
     fi
 fi
 
-# Extraire l'archive
+# Extraire l'archive - CORRIGÉ
 echo -e "  ${BLUE}${BOLD}→${RESET} Recherche du début de l'archive..."
 ARCHIVE_START=$(awk '/^__ARCHIVE_BELOW__/ {print NR + 1; exit 0; }' "$0")
 [ "$DEBUG" -eq 1 ] && echo -e "  ${BLUE}${BOLD}→${RESET} Début de l'archive à la ligne : $ARCHIVE_START"
 
 echo -e "  ${BLUE}${BOLD}→${RESET} Extraction de l'archive..."
-tail -n +"$ARCHIVE_START" "$0" | tar xj -C "$EXTRACT_DIR" >/dev/null 2>&1
-[ "$DEBUG" -eq 1 ] && echo -e "  ${BLUE}${BOLD}→${RESET} Extraction terminée dans : $EXTRACT_DIR"
+
+# Créer un fichier temporaire pour stocker l'archive
+TEMP_ARCHIVE=$(mktemp)
+tail -n +"$ARCHIVE_START" "$0" > "$TEMP_ARCHIVE"
+
+# Vérifier si le fichier contient des données
+if [ ! -s "$TEMP_ARCHIVE" ]; then
+    echo -e "  ${RED}${BOLD}✗${RESET} Aucune donnée d'archive trouvée après la ligne $ARCHIVE_START"
+    rm -f "$TEMP_ARCHIVE"
+    exit 1
+fi
+
+[ "$DEBUG" -eq 1 ] && echo -e "  ${BLUE}${BOLD}→${RESET} Taille de l'archive: $(stat -c %s "$TEMP_ARCHIVE") octets"
+
+# Afficher le type de fichier pour le débogage
+if [ "$DEBUG" -eq 1 ]; then
+    echo -e "  ${BLUE}${BOLD}→${RESET} Type de fichier détecté:"
+    file "$TEMP_ARCHIVE"
+fi
+
+# Essayer différentes méthodes d'extraction
+echo -e "  ${BLUE}${BOLD}→${RESET} Tentative d'extraction avec bzip2..."
+if tar xjf "$TEMP_ARCHIVE" -C "$EXTRACT_DIR" 2>"$TEMP_ARCHIVE.log"; then
+    echo -e "  ${GREEN}${BOLD}✓${RESET} Extraction bzip2 réussie dans $EXTRACT_DIR"
+else
+    echo -e "  ${YELLOW}${BOLD}⚠${RESET} Échec de l'extraction bzip2, tentative avec gzip..."
+    if tar xzf "$TEMP_ARCHIVE" -C "$EXTRACT_DIR" 2>>"$TEMP_ARCHIVE.log"; then
+        echo -e "  ${GREEN}${BOLD}✓${RESET} Extraction gzip réussie dans $EXTRACT_DIR"
+    else
+        echo -e "  ${YELLOW}${BOLD}⚠${RESET} Échec de l'extraction gzip, tentative avec xz..."
+        if tar xJf "$TEMP_ARCHIVE" -C "$EXTRACT_DIR" 2>>"$TEMP_ARCHIVE.log"; then
+            echo -e "  ${GREEN}${BOLD}✓${RESET} Extraction xz réussie dans $EXTRACT_DIR"
+        else
+            echo -e "  ${RED}${BOLD}✗${RESET} Toutes les tentatives d'extraction ont échoué"
+            if [ "$DEBUG" -eq 1 ]; then
+                echo -e "  ${RED}${BOLD}✗${RESET} Détails de l'erreur:"
+                cat "$TEMP_ARCHIVE.log"
+                
+                # Vérifier la présence de tar et des décompresseurs
+                echo -e "  ${BLUE}${BOLD}→${RESET} Vérification des outils d'extraction:"
+                which tar bzip2 gzip xz 2>/dev/null || echo "Certains outils peuvent être manquants"
+                
+                # Afficher les premières lignes de l'archive pour inspection
+                echo -e "  ${BLUE}${BOLD}→${RESET} Début de l'archive (20 premiers octets en hexadécimal):"
+                head -c 20 "$TEMP_ARCHIVE" | hexdump -C
+            fi
+            rm -f "$TEMP_ARCHIVE" "$TEMP_ARCHIVE.log"
+            exit 1
+        fi
+    fi
+fi
+
+# Nettoyage
+rm -f "$TEMP_ARCHIVE" "$TEMP_ARCHIVE.log"
+
+# Vérifier le contenu du répertoire d'extraction
+if [ "$DEBUG" -eq 1 ]; then
+    echo -e "  ${BLUE}${BOLD}→${RESET} Contenu du répertoire d'extraction ($EXTRACT_DIR):"
+    ls -la "$EXTRACT_DIR"
+fi
 
 # Exécuter le script principal si présent et si on n'est pas en mode extraction seule
 if [ -n "$SCRIPT_EXEC" ] && [ "$EXTRACT_ONLY" -eq 0 ]; then
