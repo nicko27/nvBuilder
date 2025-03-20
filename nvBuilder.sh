@@ -1,429 +1,571 @@
 #!/bin/bash
+PATH="/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin"
 set -e
+CURRENT_DIR=$(dirname $(realpath $0))
+AUTOUPDATE_URL=""
+VERSION_URL=""
+CONTENT_DIR=""
+SCRIPT_EXEC=""
+EXTRACT_ONLY=0
+OUTPUT="./autoextract.sh"
+FICHIER_VERSION=""
+NEED_ROOT=0
+SEND_CALLING_DIR=0
+DEBUG=0
+COLOR_DEF="\e[0m"
+RED="\e[0;31m"
+GREEN="\e[0;32m"
+BLUE="\e[0;34m"
+PURPLE="\e[0;35m"
+TAG_SIZE=8
+SAVE_CURSOR="\e[s"
+RESTORE_CURSOR="\e[u"
+CLEAR_LINE="\e[K"
+RESET_ROW="\e[1000D"
 
-# Version du script
-VERSION="1.0.0"
-
-# Couleurs et formatage
-BOLD="\033[1m"
-RED="\033[31m"
-GREEN="\033[32m"
-YELLOW="\033[33m"
-BLUE="\033[34m"
-RESET="\033[0m"
-
-# Fonction d'aide
-show_help() {
-    echo "Usage: $0 [options]"
+showReturnedMessage()
+{
+    showMessage $1 $2 $3
     echo ""
-    echo "Options:"
-    echo "  -h, --help           Affiche cette aide"
-    echo "  -c, --config FILE    Utilise le fichier de configuration spécifié"
-    echo "  -d, --dir DIR        Spécifie le répertoire d'extraction"
-    echo "  -x, --extract-only   Extrait uniquement l'archive sans exécuter le script"
-    echo "      --debug          Active le mode debug"
-    echo "      --skip-version   Désactive la vérification de version"
 }
 
-# Fonction de compression
-compress_files() {
-    local content_dir="$1"
-    local output_file="$2"
-    local temp_dir=$(mktemp -d)
-    local archive_file="$temp_dir/archive.tar"
-    
-    echo -e "  ${BLUE}${BOLD}→${RESET} Compression des fichiers..."
-    
-    # Construire la commande tar avec les patterns
-    local tar_opts=()
-    [ "$VERBOSITY" -gt 1 ] && tar_opts+=("v")
-    
-    # Ajouter les patterns d'inclusion
-    local include_args=()
-    for pattern in "${INCLUDE_PATTERNS[@]}"; do
-        include_args+=("--include=$pattern")
-    done
-    
-    # Ajouter les patterns d'exclusion
-    local exclude_args=()
-    for pattern in "${EXCLUDE_PATTERNS[@]}"; do
-        exclude_args+=("--exclude=$pattern")
-    done
-    
-    # Créer l'archive
-    if ! tar "c${tar_opts[@]}f" "$archive_file" "${include_args[@]}" "${exclude_args[@]}" -C "$content_dir" . >/dev/null 2>&1; then
-        echo -e "  ${RED}${BOLD}✗${RESET} Erreur lors de la création de l'archive"
-        rm -rf "$temp_dir"
+showMessage()
+{
+    if [ $# -ge 3 ]
+    then
+        textTag=$1
+        colorTag=$2
+        shift
+        shift
+        params="$@"
+        msg=`echo $params|cut -d"|" -f1`
+        infoSup=`echo $params|cut -d"|" -f2 -s`
+        nbspace=$((($TAG_SIZE-${#textTag})/2))
+        pos=0
+        left=""
+        while [ $pos -ne $nbspace ]
+        do
+            pos=$(($pos+1))
+            left="$left "
+        done
+        right=$left
+        sum=`echo "$nbspace+${#textTag}+$nbspace"|bc`
+        if [ $sum -ne $TAG_SIZE ]
+        then
+            right="$right "
+        fi
+        if [ $DEBUG -eq 0 ]
+        then
+            tag="[$left$colorTag$textTag$right$COLOR_DEF]"
+            printf "$CLEAR_LINE$RESET_ROW$tag $msg $RED$infoSup$COLOR_DEF$RESET_ROW"
+        else
+            tag="[$left$textTag$right]"
+            echo -ne "$CLEAR_LINE$RESET_ROW$tag $msg $infoSup$RESET_ROW"
+        fi
+    else
+        echo "Pb de nombre de paramêtres passés à la fonction"
         exit 1
     fi
-    
-    # Compresser selon la méthode choisie
-    case "$COMPRESSION" in
-        "bzip2")
-            if ! bzip2 "$archive_file"; then
-                echo -e "  ${RED}${BOLD}✗${RESET} Erreur lors de la compression bzip2"
-                rm -rf "$temp_dir"
-                exit 1
-            fi
-            archive_file="$archive_file.bz2"
-            ;;
-        "gzip")
-            if ! gzip "$archive_file"; then
-                echo -e "  ${RED}${BOLD}✗${RESET} Erreur lors de la compression gzip"
-                rm -rf "$temp_dir"
-                exit 1
-            fi
-            archive_file="$archive_file.gz"
-            ;;
-        *)
-            echo -e "  ${RED}${BOLD}✗${RESET} Méthode de compression non supportée: $COMPRESSION"
-            rm -rf "$temp_dir"
-            exit 1
-            ;;
-    esac
-    
-    local archive_size=$(stat -f %z "$archive_file" 2>/dev/null || stat -c %s "$archive_file")
-    echo -e "  ${GREEN}${BOLD}✓${RESET} Archive créée avec succès ($archive_size octets)"
-    
-    echo -e "  ${BLUE}${BOLD}→${RESET} Génération du script auto-extractible..."
-    
-    # Copier le script actuel jusqu'à la marque
-    sed '/^__ARCHIVE_BELOW__$/,$d' "$0" > "$output_file"
-    
-    # Ajouter la marque
-    echo "__ARCHIVE_BELOW__" >> "$output_file"
-    
-    # Ajouter l'archive
-    cat "$archive_file" >> "$output_file"
-    
-    chmod +x "$output_file"
-    echo -e "  ${GREEN}${BOLD}✓${RESET} Script auto-extractible généré : $output_file"
-    
-    rm -rf "$temp_dir"
 }
 
-# Variables par défaut
-EXTRACT_DIR=""
-EXTRACT_ONLY=0
-NEED_ROOT=1
-VERSION_URL="http://localhost/newInstall.sh.version"
-VERSION_CHECK=1
-SCRIPT_EXEC="start.sh"
-DEBUG=0
-SKIP_VERSION_CHECK=0
-CONFIG_FILE=""
-VERBOSITY=1
-COMPRESSION="bzip2"
-BACKUP=1
-INCLUDE_PATTERNS=()
-EXCLUDE_PATTERNS=()
-SEND_CALLING_DIR=0
+showResult()
+{
+    resultat=$1
+    msg=$2
+    if [ $resultat == "0" ]
+    then
+        textTag="OK"
+        colorTag=$GREEN
+    else
+        textTag="ERREUR"
+        colorTag=$RED
+    fi
+    showReturnedMessage $textTag $colorTag "$msg"
+}
 
-# Parser les arguments
-while [[ $# -gt 0 ]]; do
-    case $1 in
-        -h|--help)
-            show_help
+showProgress()
+{
+    pct=$1
+    msg=$2
+    showReturnedMessage $pct $BLUE $msg
+}
+
+showOk()
+{
+    msg=$1
+    showReturnedMessage "OK" $GREEN "$msg"
+}
+
+showOK()
+{
+    msg=$1
+    showReturnedMessage "OK" $GREEN "$msg"
+}
+
+showError()
+{
+    msg=$1
+    showReturnedMessage "ERREUR" $RED "$msg"
+}
+
+showSucces()
+{
+    msg=$1
+    showReturnedMessage "SUCCES" $GREEN "$msg"
+}
+
+showInfo()
+{
+    msg=$1
+    showReturnedMessage "INFO" $BLUE "$msg"
+}
+
+showAction()
+{
+    msg=$1
+    showReturnedMessage "ACTION" $PURPLE "$msg"
+}
+
+Usage(){
+    echo "--help                :   Ces lignes"
+    echo "--autoupdate url      :   vérifie si une version est disponible a l'url indiquée"
+    echo "                          si version pas indiqué, le script téléchargera toujours la"
+    echo "                          version distante"
+    echo "--version url         :   vérifie dans le fichier indiqué par l'url si la version est"
+    echo "                          différente, si oui et autoupdate indiqué alors télécharge la "
+    echo "                          nouvelle version et l'exécute"
+    echo "--fichier_version nom :   ajoute un fichier version dans le même répertoire que le script à créer"
+    echo "--content             :   dossier de contenu à inclure dans le script autoextractable"
+    echo "--extract-only        :   décompresse le contenu mais ne lance pas de script"
+    echo "--script              :   nom du script contenu dans le dossier défini par content à exécuter une fois"
+    echo "                          l'archive décompressée"
+    echo "--output              :   nom et chemin du script à créer [defaut=./autoextract.sh]"
+    echo "--need_root           :   le script créer devra t'il s'exécuter en root [defaut=non]"
+    echo "--send_calling_dir    :   Le script doit il fournir en paramêtre du script le dossier par lequel il est"
+    echo "                          lancé [defaut=non]"
+    echo "--debug               :   mode debug [defaut=non]"
+    exit 1
+}
+
+while true
+do
+    case "$1" in
+        --help)
+            Usage
             exit 0
-            ;;
-        -c|--config)
-            CONFIG_FILE="$2"
-            shift 2
-            ;;
-        -d|--dir)
-            EXTRACT_DIR="$2"
-            shift 2
-            ;;
-        -x|--extract-only)
-            EXTRACT_ONLY=1
+        ;;
+        --fichier_version)
             shift
-            ;;
+            FICHIER_VERSION=$1
+            shift
+        ;;
         --debug)
             DEBUG=1
             shift
-            ;;
-        --skip-version)
-            SKIP_VERSION_CHECK=1
+        ;;
+        --need_root)
+            NEED_ROOT=1
             shift
-            ;;
+        ;;
+        --extract_only)
+            EXTRACT_ONLY=1
+            shift
+        ;;
+        --autoupdate)
+            shift
+            AUTOUPDATE_URL=$1
+            shift
+        ;;
+        --version)
+            shift
+            VERSION_URL=$1
+            shift
+        ;;
+        --content)
+            shift
+            CONTENT_DIR=$1
+            shift
+        ;;
+        --script)
+            shift
+            SCRIPT_EXEC=$1
+            shift
+        ;;
+        --output)
+            shift
+            OUTPUT=$1
+            shift
+        ;;
+        --send_calling_dir)
+            shift
+            SEND_CALLING_DIR=1
+        ;;
         *)
-            echo "Option invalide : $1"
-            show_help
-            exit 1
-            ;;
+            break
+        ;;
     esac
 done
 
-# Charger la configuration si spécifiée
-if [ -n "$CONFIG_FILE" ]; then
-    if [ ! -f "$CONFIG_FILE" ]; then
-        echo -e "  ${RED}${BOLD}✗${RESET} Fichier de configuration non trouvé : $CONFIG_FILE"
-        exit 1
-    fi
-    echo -e "  ${BLUE}${BOLD}→${RESET} Chargement de la configuration depuis $CONFIG_FILE"
-    
-    # Utiliser yq pour parser le YAML si disponible
-    if command -v yq >/dev/null 2>&1; then
-        # Lecture des paramètres simples
-        OUTPUT_FILE=$(yq e '.output_file' "$CONFIG_FILE")
-        CONTENT_DIR=$(yq e '.content_dir' "$CONFIG_FILE")
-        SCRIPT_EXEC=$(yq e '.script_exec' "$CONFIG_FILE")
-        COMPRESSION=$(yq e '.compression // "bzip2"' "$CONFIG_FILE")
-        VERBOSITY=$(yq e '.verbosity // 1' "$CONFIG_FILE")
-        
-        # Lecture des booléens
-        [ "$(yq e '.need_root // true' "$CONFIG_FILE")" = "true" ] && NEED_ROOT=1 || NEED_ROOT=0
-        [ "$(yq e '.version_check // true' "$CONFIG_FILE")" = "true" ] && VERSION_CHECK=1 || VERSION_CHECK=0
-        [ "$(yq e '.debug // false' "$CONFIG_FILE")" = "true" ] && DEBUG=1 || DEBUG=0
-        [ "$(yq e '.backup // true' "$CONFIG_FILE")" = "true" ] && BACKUP=1 || BACKUP=0
-        [ "$(yq e '.send_calling_dir // false' "$CONFIG_FILE")" = "true" ] && SEND_CALLING_DIR=1 || SEND_CALLING_DIR=0
-        
-        # Lecture des patterns
-        readarray -t INCLUDE_PATTERNS < <(yq e '.include_patterns[]' "$CONFIG_FILE")
-        readarray -t EXCLUDE_PATTERNS < <(yq e '.exclude_patterns[]' "$CONFIG_FILE")
-        
-        VERSION_URL=$(yq e '.version_url // "http://localhost/newInstall.sh.version"' "$CONFIG_FILE")
-    else
-        # Fallback: parser basique ligne par ligne si yq n'est pas disponible
-        while IFS=: read -r key value; do
-            # Supprimer les espaces au début et à la fin
-            key=$(echo "$key" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-            value=$(echo "$value" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-            
-            case "$key" in
-                "output_file") OUTPUT_FILE="$value" ;;
-                "content_dir") CONTENT_DIR="$value" ;;
-                "script_exec") SCRIPT_EXEC="$value" ;;
-                "compression") COMPRESSION="$value" ;;
-                "verbosity") VERBOSITY="$value" ;;
-                "need_root") [ "$value" = "true" ] && NEED_ROOT=1 || NEED_ROOT=0 ;;
-                "version_check") [ "$value" = "true" ] && VERSION_CHECK=1 || VERSION_CHECK=0 ;;
-                "version_url") VERSION_URL="$value" ;;
-                "debug") [ "$value" = "true" ] && DEBUG=1 || DEBUG=0 ;;
-                "backup") [ "$value" = "true" ] && BACKUP=1 || BACKUP=0 ;;
-                "send_calling_dir") [ "$value" = "true" ] && SEND_CALLING_DIR=1 || SEND_CALLING_DIR=0 ;;
-            esac
-        done < "$CONFIG_FILE"
-    fi
-    
-    # Vérifier les variables obligatoires
-    if [ -z "$OUTPUT_FILE" ] || [ -z "$CONTENT_DIR" ]; then
-        echo -e "  ${RED}${BOLD}✗${RESET} Configuration invalide : output_file et content_dir sont requis"
-        exit 1
-    fi
-    
-    # Nettoyer et normaliser les valeurs de configuration
-    CONTENT_DIR=$(echo "$CONTENT_DIR" | sed 's/"//g')
-    OUTPUT_FILE=$(echo "$OUTPUT_FILE" | sed 's/"//g')
-    COMPRESSION=$(echo "$COMPRESSION" | sed 's/"//g')
-    SCRIPT_EXEC=$(echo "$SCRIPT_EXEC" | sed 's/"//g')
-    VERSION_URL=$(echo "$VERSION_URL" | sed 's/"//g')
-    
-    # Convertir les chemins relatifs en absolus
-    if [[ "$CONTENT_DIR" != /* ]]; then
-        CONTENT_DIR="$(pwd)/$CONTENT_DIR"
-    fi
-    if [[ "$OUTPUT_FILE" != /* ]]; then
-        OUTPUT_FILE="$(pwd)/$OUTPUT_FILE"
-    fi
-    
-    [ "$DEBUG" -eq 1 ] && echo -e "  ${BLUE}${BOLD}→${RESET} Chemin source absolu : $CONTENT_DIR"
-    [ "$DEBUG" -eq 1 ] && echo -e "  ${BLUE}${BOLD}→${RESET} Chemin sortie absolu : $OUTPUT_FILE"
-    
-    # Vérifier que le dossier source existe
-    if [ ! -d "$CONTENT_DIR" ]; then
-        echo -e "  ${RED}${BOLD}✗${RESET} Dossier source non trouvé : $CONTENT_DIR"
-        exit 1
-    fi
-    
-    # Compresser les fichiers
-    compress_files "$CONTENT_DIR" "$OUTPUT_FILE"
-    echo -e "  ${GREEN}${BOLD}✓${RESET} Script généré avec succès : $OUTPUT_FILE"
-    exit 0
+SCRIPT_NAME=$(basename $OUTPUT)
+if test $DEBUG -eq 1;then
+showInfo "Mode Debug actif"
+echo "AUTOUPDATE_URL:$AUTOUPDATE_URL"
+echo "VERSION_URL:$VERSION_URL"
+echo "CONTENT_DIR:$CONTENT_DIR"
+echo "SCRIPT_EXEC:$SCRIPT_EXEC"
+echo "EXTRACT_ONLY:$EXTRACT_ONLY"
+echo "OUTPUT:$OUTPUT"
+echo "FICHIER_VERSION:$FICHIER_VERSION"
+echo "NEED_ROOT:$NEED_ROOT"
+echo "SEND_CALLING_DIR:$SEND_CALLING_DIR"
+set -xve
 fi
 
-# Afficher la configuration en mode debug
-[ "$DEBUG" -eq 1 ] && {
-    echo -e "  ${BLUE}${BOLD}→${RESET} Configuration :"
-    echo -e "    - EXTRACT_DIR: $EXTRACT_DIR"
-    echo -e "    - EXTRACT_ONLY: $EXTRACT_ONLY"
-    echo -e "    - DEBUG: $DEBUG"
-    echo -e "    - SKIP_VERSION_CHECK: $SKIP_VERSION_CHECK"
-    echo -e "    - SCRIPT_EXEC: $SCRIPT_EXEC"
-    echo -e "    - VERSION_CHECK: $VERSION_CHECK"
-    echo -e "    - VERSION_URL: $VERSION_URL"
+if [ -z "$CONTENT_DIR" ];then
+    showError "Informations nécessaires non définies"
+    Usage
+    exit 1
+fi
+if [ -z "$SCRIPT_EXEC" ];then
+    if test $EXTRACT_ONLY -ne 1; then
+        showError "Le script à executer ou le mode extract_only doivent être sélectionné"
+        Usage
+        exit 1
+    fi
+fi
+
+if test $DEBUG -eq 0;then
+    tmp=`mktemp -d "/tmp/$SCRIPT_NAME.XXX"`
+else
+    tmp=`mktemp -d "$CURRENT_DIR/$SCRIPT_NAME.XXX"`
+fi
+
+NUM_VERSION=`date +%Y%m%d%H%M%S`
+showInfo "Numéro de version =>|$NUM_VERSION"
+
+if [ ! -z $FICHIER_VERSION ]
+then
+    echo $NUM_VERSION > $FICHIER_VERSION
+fi
+
+showAction "Compression des fichiers"
+cd $CONTENT_DIR
+tar -cf  "$tmp/include.tar" * --no-same-owner --no-same-permissions
+if test $DEBUG -eq 1;then
+    tar --list -f $tmp/include.tar
+fi
+
+cd $tmp
+
+gzip include.tar
+cat << EOT >> decompress
+#!/bin/sh
+PATH="/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin"
+SCRIPT_NAME=\$(basename \$0)
+CURRENT_DIR=\$(dirname \$(realpath \$0))
+SEND_CALLING_DIR=%SEND_CALLING_DIR%
+NO_UPDATE=0
+EXTRACT_ONLY=%EXTRACT_ONLY%
+EXTRACT_ONLY_FORCE=0
+VERSION_URL="%VERSION_URL%"
+AUTOUPDATE_URL="%AUTOUPDATE_URL%"
+NUM_VERSION="%NUM_VERSION%"
+SCRIPT_EXEC="%SCRIPT_EXEC%"
+NB_LIGNES="%NB_LIGNES%"
+NEED_ROOT="%NEED_ROOT%"
+MODE_DEBUG="%MODE_DEBUG%"
+DEBUG=0
+PARAMS="\$@"
+COLOR_DEF="\e[0m"
+RED="\e[0;31m"
+GREEN="\e[0;32m"
+BLUE="\e[0;34m"
+PURPLE="\e[0;35m"
+TAG_SIZE=8
+SAVE_CURSOR="\e[s"
+RESTORE_CURSOR="\e[u"
+CLEAR_LINE="\e[K"
+RESET_ROW="\e[1000D"
+
+showReturnedMessage()
+{
+    showMessage \$1 \$2 \$3
+    echo ""
 }
 
-# Vérifier les droits root si nécessaire
-if [ "$NEED_ROOT" -eq 1 ] && [ "$EUID" -ne 0 ]; then
-    echo -e "  ${BLUE}${BOLD}→${RESET} Ce script nécessite les droits administrateur"
-    echo -e "  ${BLUE}${BOLD}→${RESET} Veuillez exécuter le script avec sudo"
-    exit 1
-fi
-
-# Gestion du répertoire d'extraction - CORRIGÉ
-if [ -z "$EXTRACT_DIR" ]; then
-    EXTRACT_DIR=$(mktemp -d)
-    echo -e "  ${BLUE}${BOLD}→${RESET} Répertoire d'extraction temporaire créé: $EXTRACT_DIR"
-else
-    # S'assurer que le chemin est absolu
-    if [[ "$EXTRACT_DIR" != /* ]]; then
-        EXTRACT_DIR="$(pwd)/$EXTRACT_DIR"
-    fi
-    
-    # Créer le répertoire s'il n'existe pas
-    if [ ! -d "$EXTRACT_DIR" ]; then
-        mkdir -p "$EXTRACT_DIR"
-        if [ $? -ne 0 ]; then
-            echo -e "  ${RED}${BOLD}✗${RESET} Impossible de créer le répertoire d'extraction: $EXTRACT_DIR"
-            exit 1
+showMessage()
+{
+    if [ \$# -ge 3 ]
+    then
+        textTag=\$1
+        colorTag=\$2
+        shift
+        shift
+        params="\$@"
+        msg=\`echo \$params|cut -d"|" -f1\`
+        infoSup=\`echo \$params|cut -d"|" -f2 -s\`
+        nbspace=\$(((\$TAG_SIZE-\${#textTag})/2))
+        pos=0
+        left=""
+        while [ \$pos -ne \$nbspace ]
+        do
+            pos=\$((\$pos+1))
+            left="\$left "
+        done
+        right=\$left
+        sum=\`echo "\$nbspace+\${#textTag}+\$nbspace"|bc\`
+        if [ \$sum -ne \$TAG_SIZE ]
+        then
+            right="\$right "
         fi
-        echo -e "  ${BLUE}${BOLD}→${RESET} Répertoire d'extraction créé: $EXTRACT_DIR"
-    fi
-    
-    # Vérifier les permissions
-    if [ ! -w "$EXTRACT_DIR" ]; then
-        echo -e "  ${RED}${BOLD}✗${RESET} Permissions insuffisantes sur le répertoire: $EXTRACT_DIR"
-        exit 1
-    fi
-fi
-
-[ "$DEBUG" -eq 1 ] && echo -e "  ${BLUE}${BOLD}→${RESET} Extraction dans: $EXTRACT_DIR"
-
-
-# Vérifier la version - CORRIGÉ
-if [ "$VERSION_CHECK" -eq 1 ] && [ -n "$VERSION_URL" ] && [ "$EXTRACT_ONLY" -eq 0 ] && [ "$SKIP_VERSION_CHECK" -eq 0 ]; then
-    echo -e "  ${BLUE}${BOLD}→${RESET} Vérification des mises à jour..."
-    [ "$DEBUG" -eq 1 ] && echo -e "  ${BLUE}${BOLD}→${RESET} Version locale : $VERSION"
-    [ "$DEBUG" -eq 1 ] && echo -e "  ${BLUE}${BOLD}→${RESET} URL de vérification : $VERSION_URL"
-
-    if ! remote_info=$(wget -qO- "$VERSION_URL" 2>/dev/null); then
-        echo -e "  ${YELLOW}${BOLD}⚠${RESET} Impossible de vérifier les mises à jour"
-        [ "$DEBUG" -eq 1 ] && echo -e "  ${RED}${BOLD}✗${RESET} Erreur de connexion à $VERSION_URL"
-    else
-        [ "$DEBUG" -eq 1 ] && echo -e "  ${GREEN}${BOLD}✓${RESET} Réponse reçue du serveur"
-        [ "$DEBUG" -eq 1 ] && echo -e "  ${BLUE}${BOLD}→${RESET} Réponse brute : $remote_info"
-
-        if ! remote_version=$(echo "$remote_info" | grep -o '"version":"[^"]*"' | cut -d'"' -f4); then
-            echo -e "  ${YELLOW}${BOLD}⚠${RESET} Format de version invalide"
-            [ "$DEBUG" -eq 1 ] && echo -e "  ${RED}${BOLD}✗${RESET} Impossible d'extraire la version de la réponse"
+        if [ \$DEBUG -eq 0 ]
+        then
+            tag="[\$left\$colorTag\$textTag\$right\$COLOR_DEF]"
+            printf "\$CLEAR_LINE\$RESET_ROW\$tag \$msg \$RED\$infoSup\$COLOR_DEF\$RESET_ROW"
         else
-            [ "$DEBUG" -eq 1 ] && echo -e "  ${GREEN}${BOLD}✓${RESET} Version distante extraite : $remote_version"
-            remote_url=$(echo "$remote_info" | grep -o '"url":"[^"]*"' | cut -d'"' -f4)
-            
-            # Comparer les versions
-            if [ -n "$remote_version" ]; then
-                if [ "$remote_version" != "$VERSION" ]; then
-                    echo -e "  ${YELLOW}${BOLD}⚠${RESET} Une nouvelle version est disponible : $remote_version"
-                    echo -e "  ${BLUE}${BOLD}→${RESET} Version actuelle : $VERSION"
-                    if [ -n "$remote_url" ]; then
-                        echo -e "  ${BLUE}${BOLD}→${RESET} URL de téléchargement : $remote_url"
-                    fi
-                    # Ne pas quitter, simplement notifier
-                    echo -e "  ${YELLOW}${BOLD}⚠${RESET} Poursuite avec la version actuelle"
-                else
-                    echo -e "  ${GREEN}${BOLD}✓${RESET} Version à jour ($VERSION)"
-                fi
-            fi
+            tag="[\$left\$textTag\$right]"
+            echo -ne "\$CLEAR_LINE\$RESET_ROW\$tag \$msg \$infoSup\$RESET_ROW"
         fi
-    fi
-fi
-
-# Extraire l'archive - CORRIGÉ
-echo -e "  ${BLUE}${BOLD}→${RESET} Recherche du début de l'archive..."
-ARCHIVE_START=$(awk '/^__ARCHIVE_BELOW__/ {print NR + 1; exit 0; }' "$0")
-[ "$DEBUG" -eq 1 ] && echo -e "  ${BLUE}${BOLD}→${RESET} Début de l'archive à la ligne : $ARCHIVE_START"
-
-echo -e "  ${BLUE}${BOLD}→${RESET} Extraction de l'archive..."
-
-# Créer un fichier temporaire pour stocker l'archive
-TEMP_ARCHIVE=$(mktemp)
-tail -n +"$ARCHIVE_START" "$0" > "$TEMP_ARCHIVE"
-
-# Vérifier si le fichier contient des données
-if [ ! -s "$TEMP_ARCHIVE" ]; then
-    echo -e "  ${RED}${BOLD}✗${RESET} Aucune donnée d'archive trouvée après la ligne $ARCHIVE_START"
-    rm -f "$TEMP_ARCHIVE"
-    exit 1
-fi
-
-[ "$DEBUG" -eq 1 ] && echo -e "  ${BLUE}${BOLD}→${RESET} Taille de l'archive: $(stat -c %s "$TEMP_ARCHIVE") octets"
-
-# Afficher le type de fichier pour le débogage
-if [ "$DEBUG" -eq 1 ]; then
-    echo -e "  ${BLUE}${BOLD}→${RESET} Type de fichier détecté:"
-    file "$TEMP_ARCHIVE"
-fi
-
-# Essayer différentes méthodes d'extraction
-echo -e "  ${BLUE}${BOLD}→${RESET} Tentative d'extraction avec bzip2..."
-if tar xjf "$TEMP_ARCHIVE" -C "$EXTRACT_DIR" 2>"$TEMP_ARCHIVE.log"; then
-    echo -e "  ${GREEN}${BOLD}✓${RESET} Extraction bzip2 réussie dans $EXTRACT_DIR"
-else
-    echo -e "  ${YELLOW}${BOLD}⚠${RESET} Échec de l'extraction bzip2, tentative avec gzip..."
-    if tar xzf "$TEMP_ARCHIVE" -C "$EXTRACT_DIR" 2>>"$TEMP_ARCHIVE.log"; then
-        echo -e "  ${GREEN}${BOLD}✓${RESET} Extraction gzip réussie dans $EXTRACT_DIR"
     else
-        echo -e "  ${YELLOW}${BOLD}⚠${RESET} Échec de l'extraction gzip, tentative avec xz..."
-        if tar xJf "$TEMP_ARCHIVE" -C "$EXTRACT_DIR" 2>>"$TEMP_ARCHIVE.log"; then
-            echo -e "  ${GREEN}${BOLD}✓${RESET} Extraction xz réussie dans $EXTRACT_DIR"
-        else
-            echo -e "  ${RED}${BOLD}✗${RESET} Toutes les tentatives d'extraction ont échoué"
-            if [ "$DEBUG" -eq 1 ]; then
-                echo -e "  ${RED}${BOLD}✗${RESET} Détails de l'erreur:"
-                cat "$TEMP_ARCHIVE.log"
-                
-                # Vérifier la présence de tar et des décompresseurs
-                echo -e "  ${BLUE}${BOLD}→${RESET} Vérification des outils d'extraction:"
-                which tar bzip2 gzip xz 2>/dev/null || echo "Certains outils peuvent être manquants"
-                
-                # Afficher les premières lignes de l'archive pour inspection
-                echo -e "  ${BLUE}${BOLD}→${RESET} Début de l'archive (20 premiers octets en hexadécimal):"
-                head -c 20 "$TEMP_ARCHIVE" | hexdump -C
+        echo "Pb de nombre de paramêtres passés à la fonction"
+        exit 1
+    fi
+}
+
+showResult()
+{
+    resultat=\$1
+    msg=\$2
+    if [ \$resultat == "0" ]
+    then
+        textTag="OK"
+        colorTag=$GREEN
+    else
+        textTag="ERREUR"
+        colorTag=$RED
+    fi
+    showReturnedMessage \$textTag \$colorTag "\$msg"
+}
+
+showProgress()
+{
+    pct=\$1
+    msg=\$2
+    showReturnedMessage \$pct \$BLUE \$msg
+}
+
+showOk()
+{
+    msg=\$1
+    showReturnedMessage "OK" \$GREEN "\$msg"
+}
+
+showOK()
+{
+    msg=\$1
+    showReturnedMessage "OK" \$GREEN "\$msg"
+}
+
+showError()
+{
+    msg=\$1
+    showReturnedMessage "ERREUR" \$RED "\$msg"
+}
+
+showSucces()
+{
+    msg=\$1
+    showReturnedMessage "SUCCES" \$GREEN "\$msg"
+}
+
+showInfo()
+{
+    msg=\$1
+    showReturnedMessage "INFO" \$BLUE "\$msg"
+}
+
+showAction()
+{
+    msg=\$1
+    showReturnedMessage "ACTION" \$PURPLE "\$msg"
+}
+
+Usage(){
+    echo "--help                :   Ces lignes"
+    echo "--no_update           :   Pas de vérification et de lancement de la nouvelle version même"
+    echo "                      :   si à l'origine le programme le prévoit"
+    echo "--extract_only        :   Extrait les fichiers mais ne lance pas le script après implique --no_update"
+    echo "--debug               :   mode debug [defaut=non]"
+}
+
+MODE_DEBUG=""
+
+while true
+do
+    case "\$1" in
+        --help)
+            Usage
+            exit 0
+        ;;
+        --no_update)
+            NO_UPDATE=1
+            shift
+        ;;
+        --debug)
+            DEBUG=1
+            MODE_DEBUG="--debug"
+            shift
+        ;;
+        --extract_only)
+            EXTRACT_ONLY_FORCE=1
+            shift
+        ;;
+        *)
+            break
+        ;;
+    esac
+done
+
+if test \$DEBUG -eq 1;then
+    showInfo "Mode Debug actif"
+    echo "SCRIPT_NAME:\$SCRIPT_NAME"
+    echo "CURRENT_DIR:\$CURRENT_DIR"
+    echo "NO_UPDATE:\$NO_UPDATE"
+    echo "EXTRACT_ONLY:\$EXTRACT_ONLY"
+    echo "EXTRACT_ONLY_FORCE:\$EXTRACT_ONLY_FORCE"
+    echo "VERSION_URL:\$VERSION_URL"
+    echo "AUTOUPDATE_URL=\$AUTOUPDATE_URL"
+    echo "NUM_VERSION:\$NUM_VERSION"
+    echo "SEND_CALLING_DIR:\$SEND_CALLING_DIR"
+    echo "NB_LIGNES:\$NB_LIGNES"
+    echo "NEED_ROOT:\$NEED_ROOT"
+    echo "DEBUG:\$DEBUG"
+    set -xv
+fi
+
+if [ \$EXTRACT_ONLY -eq 1 ] || [ \$EXTRACT_ONLY_FORCE -eq 1 ]
+then
+    NO_UPDATE=1
+fi
+
+
+if [ ! "\$BASH_VERSION" ]
+then
+    showAction "Redémarrage via Bash"
+    /bin/bash "\$0" \$PARAMS
+    exit \$?
+fi
+
+if test \$NEED_ROOT -eq 1;then
+    IDuser=\`id -u\`
+    if [ \$IDuser -ne 0 ]
+    then
+        showAction "Redémarrage en root"
+        /usr/bin/sudo /bin/bash "\$0" \$PARAMS
+        exit \$?
+    fi
+fi
+
+if [ \$DEBUG -eq 1 ] || [ \$EXTRACT_ONLY -eq 1 ] || [ \$EXTRACT_ONLY_FORCE -eq 1 ]
+then
+    tmp=\`mkdir -p "./\$SCRIPT_NAME.extract"\`
+    tmp="\$CURRENT_DIR/\$SCRIPT_NAME.extract"
+else
+    tmp=\`mktemp -d "/tmp/\$SCRIPT_NAME.XXX"\`
+fi
+
+cd \$tmp
+if [ \$NO_UPDATE -eq 0  ]
+then
+    DOWNLOAD=1
+    if [ ${#VERSION_URL} -ne 0 ]
+    then
+        showAction "Vérification de la version distante"
+        if [ \$NEED_ROOT -eq 1 ]
+        then
+            chmod 777 version 2>>/dev/null
+        fi
+        wget -t 1 -q --show-progress --progress=bar:force -T 5 \$VERSION_URL -O version 2>&1
+        if [ \$? -eq 0 ]
+        then
+            chmod 777 version 2>>/dev/null
+            DL_VERSION=\`cat version\`
+            showInfo "Version en cours : \$NUM_VERSION| Version distante: \$DL_VERSION"
+            if [ \$DL_VERSION -gt \$NUM_VERSION ]
+            then
+                showAction "Téléchargement de la nouvelle version disponible"
+            else
+                DOWNLOAD=0
             fi
-            rm -f "$TEMP_ARCHIVE" "$TEMP_ARCHIVE.log"
-            exit 1
+        else
+            showError "Impossible de vérifier la présence d'une nouvelle version|On continue avec la version en cours"
+            DOWNLOAD=0
+        fi
+    else
+        showMessage "ACTION" \$PURPLE "Téléchargement de la version distante"
+        DOWNLOAD=0
+    fi
+    if [ \$DOWNLOAD -eq 1 ]
+    then
+        wget -t 1 -q --show-progress --progress=bar -T 5 \$AUTOUPDATE_URL -O newScript.sh
+        if [ \$? -eq 0 ]
+        then
+            showOk "Fichier Télécharger avec succès"
+            mv newScript.sh \$CURRENT_DIR/\$SCRIPT_NAME
+            chmod 777 \$CURRENT_DIR/\$SCRIPT_NAME
+        cd $CURRENT_DIR
+            /bin/bash \$CURRENT_DIR/\$SCRIPT_NAME \$PARAMS
+            exit \$?
+        else
+            showError "Echec du téléchargement|L'ancien script va être utilisé"
         fi
     fi
-fi
-
-# Nettoyage
-rm -f "$TEMP_ARCHIVE" "$TEMP_ARCHIVE.log"
-
-# Vérifier le contenu du répertoire d'extraction
-if [ "$DEBUG" -eq 1 ]; then
-    echo -e "  ${BLUE}${BOLD}→${RESET} Contenu du répertoire d'extraction ($EXTRACT_DIR):"
-    ls -la "$EXTRACT_DIR"
-fi
-
-# Exécuter le script principal si présent et si on n'est pas en mode extraction seule
-if [ -n "$SCRIPT_EXEC" ] && [ "$EXTRACT_ONLY" -eq 0 ]; then
-    [ "$DEBUG" -eq 1 ] && echo -e "  ${BLUE}${BOLD}→${RESET} Vérification du script $SCRIPT_EXEC"
-    if [ ! -f "$EXTRACT_DIR/$SCRIPT_EXEC" ]; then
-        echo -e "  ${RED}${BOLD}✗${RESET} Script $SCRIPT_EXEC non trouvé dans le répertoire d'extraction"
-        exit 1
+else
+    if [ ! -z AUTOUPDATE_URL ]
+    then
+        showInfo "Pas de vérification d'une nouvelle version comme demandé"
     fi
-    [ "$DEBUG" -eq 1 ] && echo -e "  ${GREEN}${BOLD}✓${RESET} Script trouvé"
-
-    echo -e "  ${BLUE}${BOLD}→${RESET} Lancement du script $SCRIPT_EXEC"
-    chmod +x "$EXTRACT_DIR/$SCRIPT_EXEC"
-    cd "$EXTRACT_DIR"
-    echo -e "  ${BLUE}${BOLD}→${RESET} Exécution de ./$SCRIPT_EXEC"
-    
-    # Construire les options
-    script_opts=()
-    [ "$DEBUG" -eq 1 ] && script_opts+=("--debug")
-    [ "$SKIP_VERSION_CHECK" -eq 1 ] && script_opts+=("--skip-version")
-    
-    # Exécuter le script
-    if ! "./$SCRIPT_EXEC" "${script_opts[@]}"; then
-        echo -e "  ${RED}${BOLD}✗${RESET} Erreur lors de l'exécution du script"
-        exit 1
-    fi
-    echo -e "  ${GREEN}${BOLD}✓${RESET} Script exécuté avec succès"
 fi
 
-echo -e "  ${GREEN}${BOLD}✓${RESET} Terminé"
+COMPLETE_ROOT="\$CURRENT_DIR/\$SCRIPT_NAME"
+tail -n+\$NB_LIGNES \$COMPLETE_ROOT >archive.tar.gz
+showAction "Décompression des fichiers"
+tar xf archive.tar.gz
+rm archive.tar.gz
+cd \$CURRENT_DIR
+
+CALLING_DIR=""
+EXTRACT_DIR="--extract_dir \$tmp"
+if test $SEND_CALLING_DIR -eq 1;then
+    CALLING_DIR="--calling_dir \$CURRENT_DIR"
+fi
+if [ \$EXTRACT_ONLY -eq 0 ] && [ \$EXTRACT_ONLY_FORCE -eq 0 ]
+then
+    showAction "Lancement de \$SCRIPT_EXEC"
+    cd \$tmp
+    bash \$tmp/\$SCRIPT_EXEC \$CALLING_DIR \$EXTRACT_DIR \$MODE_DEBUG
+else
+    showInfo "Les fichiers sont dans|\$tmp"
+fi
 exit 0
-
 __ARCHIVE_BELOW__
+EOT
+
+sed -i "s|%EXTRACT_ONLY%|$EXTRACT_ONLY|g" decompress
+sed -i "s|%VERSION_URL%|$VERSION_URL|g" decompress
+sed -i "s|%AUTOUPDATE_URL%|$AUTOUPDATE_URL|g" decompress
+sed -i "s|%NUM_VERSION%|$NUM_VERSION|g" decompress
+sed -i "s|%SCRIPT_EXEC%|$SCRIPT_EXEC|g" decompress
+sed -i "s|%NEED_ROOT%|$NEED_ROOT|g" decompress
+sed -i "s|%MODE_DEBUG%|$MODE_DEBUG|g" decompress
+sed -i "s|%SEND_CALLING_DIR%|$SEND_CALLING_DIR|g" decompress
+NB_LIGNES=`awk '/^__ARCHIVE_BELOW__/ {print NR + 1; exit 0; }' decompress`
+sed -i "s|%NB_LIGNES%|$NB_LIGNES|g" decompress
+cat decompress include.tar.gz > $SCRIPT_NAME
+if test $DEBUG -eq 1;then
+    echo $tmp
+fi
+showAction "Finalisation du script"
+cp $SCRIPT_NAME $CURRENT_DIR/$SCRIPT_NAME
+showOK      "Script créé avec succès"
+exit 0
