@@ -1,0 +1,56 @@
+# Configuration par défaut pour nvBuilder
+content: ./content  # Dossier de contenu à inclure
+script: install.sh  # Script à exécuter après décompression
+output: autoextract.sh  # Nom du script de sortie
+
+# Configuration de la compression
+compression:
+  method: gz  # gz, bz2, xz
+  level: 9    # 1-9 pour gz, 1-9 pour bz2, 0-9 pour xz
+
+# Configuration des exclusions
+exclude:
+  patterns:
+    - "*.pyc"           # Fichiers Python compilés
+    - "*.pyo"           # Fichiers Python optimisés
+    - "*.pyd"           # Fichiers Python DLL
+    - "__pycache__"     # Dossier de cache Python
+    - "*.log"           # Fichiers de log
+    - "*.tmp"           # Fichiers temporaires
+    - "*.bak"           # Fichiers de sauvegarde
+    - ".git"            # Dossier Git
+    - ".svn"            # Dossier Subversion
+    - ".DS_Store"       # Fichiers système macOS
+    - "Thumbs.db"       # Fichiers système Windows
+  ignore_case: true     # Ignorer la casse des patterns
+
+integrity:
+  enabled: true
+  checksum: sha256  # sha256, sha512, md5
+  verify: true     # Vérifier l'intégrité à l'extraction
+
+update:
+  enabled: false
+  version_url: ""
+  autoupdate_url: ""
+  version_file: ""
+
+output:
+  permissions: 755
+  send_calling_dir: false
+  need_root: false
+  cleanup: true    # Nettoyer les fichiers temporaires après exécution
+
+logging:
+  level: INFO
+  file: nvbuilder.log
+  format: '%(asctime)s - %(levelname)s - %(message)s'
+  debug: false
+  max_size: 10485760  # 10MB
+  backup_count: 5
+
+hooks:
+  pre_build: []
+  post_build: []
+  pre_extract: []
+  post_extract: [] 
