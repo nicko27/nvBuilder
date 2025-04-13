@@ -1,56 +1,40 @@
-# Configuration par défaut pour nvBuilder
-content: ./content  # Dossier de contenu à inclure
-script: install.sh  # Script à exécuter après décompression
-output: autoextract.sh  # Nom du script de sortie
+# Configuration pour NvBuilder
 
-# Configuration de la compression
-compression:
-  method: gz  # gz, bz2, xz
-  level: 9    # 1-9 pour gz, 1-9 pour bz2, 0-9 pour xz
+# Répertoire de contenu
+# content: chemin/vers/contenu
 
-# Configuration des exclusions
-exclude:
-  patterns:
-    - "*.pyc"           # Fichiers Python compilés
-    - "*.pyo"           # Fichiers Python optimisés
-    - "*.pyd"           # Fichiers Python DLL
-    - "__pycache__"     # Dossier de cache Python
-    - "*.log"           # Fichiers de log
-    - "*.tmp"           # Fichiers temporaires
-    - "*.bak"           # Fichiers de sauvegarde
-    - ".git"            # Dossier Git
-    - ".svn"            # Dossier Subversion
-    - ".DS_Store"       # Fichiers système macOS
-    - "Thumbs.db"       # Fichiers système Windows
-  ignore_case: true     # Ignorer la casse des patterns
+# Script d'installation
+# script: install.sh
 
-integrity:
-  enabled: true
-  checksum: sha256  # sha256, sha512, md5
-  verify: true     # Vérifier l'intégrité à l'extraction
+# Fichier de sortie
+# output: autoextract.sh
 
-update:
-  enabled: false
-  version_url: ""
-  autoupdate_url: ""
-  version_file: ""
+# Compression et chiffrement
+# compression:
+#   method: gz  # Méthode de compression (gz, bz2, xz)
+#   password: ""  # Mot de passe pour le chiffrement (facultatif)
+#   level: 9    # Niveau de compression (1-9)
 
-output:
-  permissions: 755
-  send_calling_dir: false
-  need_root: false
-  cleanup: true    # Nettoyer les fichiers temporaires après exécution
+# Exclusion de fichiers
+# exclude:
+#   patterns: []  # Modèles de fichiers à exclure
+#   ignore_case: true  # Ignorer la casse dans les modèles
 
-logging:
-  level: INFO
-  file: nvbuilder.log
-  format: '%(asctime)s - %(levelname)s - %(message)s'
-  debug: false
-  max_size: 10485760  # 10MB
-  backup_count: 5
+# Mise à jour automatique
+# update:
+#   enabled: false  # Activation des mises à jour automatiques
+#   version_url: https://example.com/version  # URL pour vérifier la version
+#   autoupdate_url: https://example.com/update_script  # URL pour télécharger le script de mise à jour
 
-hooks:
-  pre_build: []
-  post_build: []
-  pre_extract: []
-  post_extract: [] 
+# Options de sortie
+# output:
+#   need_root: false  # Requiert des privilèges root
+#   send_calling_dir: false  # Exporter le répertoire d'appel
+#   permissions: 755  # Permissions du fichier généré
+
+# Logging
+# logging:
+#   file: nvbuilder.log  # Fichier de log
+#   max_size: 10485760   # Taille maximale du fichier de log
+#   backup_count: 5      # Nombre de sauvegardes de logs
+#   level: INFO          # Niveau de log (DEBUG, INFO, WARNING, ERROR, CRITICAL)

@@ -1,154 +1,43 @@
-# NvBuilder Python
+# Analyse de l'intégration entre nvBuilder.sh et nvbuilder.py
 
-Une version Python du script nvBuilder pour créer des scripts auto-extractibles.
+## Introduction
 
-## Installation
+Ce document analyse l'intégration entre les scripts `nvBuilder.sh` et `nvbuilder.py`. Le script Bash `nvBuilder.sh` sert de point d'entrée pour exécuter le script Python `nvbuilder.py`, qui effectue la génération d'un script auto-extractible contenant une archive compressée des fichiers de contenu.
 
-1. Cloner le dépôt
-2. Installer les dépendances :
-```bash
-pip install -r requirements.txt
+## Plan d'analyse
+
+1. **Vérifications initiales dans `nvBuilder.sh`:**
+   - Vérification de l'installation de Python 3 et pip.
+   - Vérification de l'existence du script Python `nvbuilder.py`.
+   - Installation des dépendances via `requirements.txt`.
+
+2. **Exécution de `nvbuilder.py`:**
+   - Initialisation de la classe `NvBuilder` avec la configuration YAML.
+   - Vérification des mises à jour si activée.
+   - Création d'une archive compressée du répertoire de contenu.
+   - Génération d'un script auto-extractible contenant l'archive.
+   - Exécution des hooks pré et post construction.
+
+## Diagramme de séquence
+
+```mermaid
+sequenceDiagram
+    participant nvBuilder.sh as "nvBuilder.sh"
+    participant nvbuilder.py as "nvbuilder.py"
+
+    nvBuilder.sh->>nvBuilder.sh: Vérifier Python 3 et pip
+    nvBuilder.sh->>nvBuilder.sh: Vérifier existence de nvbuilder.py
+    nvBuilder.sh->>nvBuilder.sh: Installer dépendances depuis requirements.txt
+    nvBuilder.sh->>nvbuilder.py: Exécuter nvbuilder.py avec arguments
+    nvbuilder.py->>nvbuilder.py: Charger configuration YAML
+    nvbuilder.py->>nvbuilder.py: Vérifier mises à jour (si activé)
+    nvbuilder.py->>nvbuilder.py: Exécuter hooks pré-construction
+    nvbuilder.py->>nvbuilder.py: Créer archive compressée
+    nvbuilder.py->>nvbuilder.py: Générer script auto-extractible
+    nvbuilder.py->>nvbuilder.py: Exécuter hooks post-construction
+    nvbuilder.py-->>nvBuilder.sh: Terminer exécution
 ```
 
-## Configuration
+## Conclusion
 
-Le script est entièrement configurable via un fichier YAML (`config.yaml` par défaut) :
-
-```yaml
-# Configuration principale
-content: ./content  # Dossier de contenu à inclure
-script: install.sh  # Script à exécuter après décompression
-output: autoextract.sh  # Nom du script de sortie
-
-# Configuration de la compression
-compression:
-  method: gz  # gz, bz2, xz
-  level: 9    # 1-9 pour gz, 1-9 pour bz2, 0-9 pour xz
-
-# Configuration des exclusions
-exclude:
-  patterns:
-    - "*.pyc"           # Fichiers Python compilés
-    - "*.pyo"           # Fichiers Python optimisés
-    - "*.pyd"           # Fichiers Python DLL
-    - "__pycache__"     # Dossier de cache Python
-    - "*.log"           # Fichiers de log
-    - "*.tmp"           # Fichiers temporaires
-    - "*.bak"           # Fichiers de sauvegarde
-    - ".git"            # Dossier Git
-    - ".svn"            # Dossier Subversion
-    - ".DS_Store"       # Fichiers système macOS
-    - "Thumbs.db"       # Fichiers système Windows
-  ignore_case: true     # Ignorer la casse des patterns
-
-# Configuration de l'intégrité
-integrity:
-  enabled: true
-  checksum: sha256  # sha256, sha512, md5
-  verify: true     # Vérifier l'intégrité à l'extraction
-
-# Configuration des mises à jour
-update:
-  enabled: false
-  version_url: ""
-  autoupdate_url: ""
-  version_file: ""
-
-# Configuration de la sortie
-output:
-  permissions: 755
-  send_calling_dir: false
-  need_root: false
-  cleanup: true    # Nettoyer les fichiers temporaires après exécution
-
-# Configuration du logging
-logging:
-  level: INFO
-  file: nvbuilder.log
-  format: '%(asctime)s - %(levelname)s - %(message)s'
-  debug: false
-  max_size: 10485760  # 10MB
-  backup_count: 5
-
-# Hooks personnalisables
-hooks:
-  pre_build: []
-  post_build: []
-  pre_extract: []
-  post_extract: []
-```
-
-## Utilisation
-
-Le script ne nécessite qu'un seul paramètre optionnel :
-
-```bash
-python nvbuilder.py [--config config.yaml]
-```
-
-### Options du script généré
-
-Le script généré accepte les options suivantes :
-
-```bash
---no-update      Désactive la mise à jour automatique
---debug          Active le mode debug
---extract-only   Extrait uniquement les fichiers
---no-verify      Désactive la vérification d'intégrité
---list-excluded  Affiche la liste des fichiers exclus
-```
-
-## Exemple d'utilisation
-
-```bash
-# Utilisation avec la configuration par défaut
-python nvbuilder.py
-
-# Utilisation avec une configuration personnalisée
-python nvbuilder.py --config ma_config.yaml
-
-# Extraction sans vérification d'intégrité
-./autoextract.sh --no-verify
-
-# Afficher la liste des fichiers exclus
-./autoextract.sh --list-excluded
-```
-
-## Fonctionnalités
-
-- Création de scripts auto-extractibles
-- Mise à jour automatique via URL
-- Gestion des versions
-- Interface utilisateur simple
-- Support du mode debug
-- Extraction seule ou exécution de script
-- Gestion des permissions root
-- Configuration via fichier YAML
-- Métadonnées avancées (version, date, taille, checksums)
-- Vérification d'intégrité des archives et fichiers
-- Nettoyage automatique des fichiers temporaires
-- Logging configurable avec rotation des fichiers
-- Hooks personnalisables (pre/post build/extract)
-- Exclusion de fichiers par patterns globaux
-- Liste des fichiers exclus
-
-## Métadonnées
-
-Le script généré inclut des métadonnées détaillées :
-
-- Version du script
-- Date de création
-- Liste des fichiers avec leurs tailles et checksums
-- Liste des fichiers exclus
-- Checksum de l'archive complète
-- Informations système (version Python, plateforme, architecture)
-
-## Notes
-
-- Le script nécessite Python 3.6 ou supérieur
-- Le script généré utilise uniquement les bibliothèques standard de Python
-- La vérification d'intégrité utilise SHA-256 par défaut
-- Les fichiers temporaires sont nettoyés automatiquement après exécution
-- Les logs sont automatiquement rotés lorsqu'ils atteignent la taille maximale
-- Les patterns d'exclusion supportent les caractères spéciaux globaux (*, ?, [])
-- La casse des patterns d'exclusion est ignorée par défaut 
+Ce plan d'analyse fournit une vue détaillée de l'intégration entre les scripts `nvBuilder.sh` et `nvbuilder.py`. Il peut être utilisé comme référence pour comprendre comment ces deux scripts interagissent lors de la génération d'un script auto-extractible.
