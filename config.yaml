@@ -1,40 +1,48 @@
-# Configuration pour NvBuilder
-
-# Répertoire de contenu
-# content: chemin/vers/contenu
-
-# Script d'installation
-# script: install.sh
-
-# Fichier de sortie
-# output: autoextract.sh
-
-# Compression et chiffrement
-# compression:
-#   method: gz  # Méthode de compression (gz, bz2, xz)
-#   password: ""  # Mot de passe pour le chiffrement (facultatif)
-#   level: 9    # Niveau de compression (1-9)
-
-# Exclusion de fichiers
-# exclude:
-#   patterns: []  # Modèles de fichiers à exclure
-#   ignore_case: true  # Ignorer la casse dans les modèles
-
-# Mise à jour automatique
-# update:
-#   enabled: false  # Activation des mises à jour automatiques
-#   version_url: https://example.com/version  # URL pour vérifier la version
-#   autoupdate_url: https://example.com/update_script  # URL pour télécharger le script de mise à jour
-
-# Options de sortie
-# output:
-#   need_root: false  # Requiert des privilèges root
-#   send_calling_dir: false  # Exporter le répertoire d'appel
-#   permissions: 755  # Permissions du fichier généré
-
-# Logging
-# logging:
-#   file: nvbuilder.log  # Fichier de log
-#   max_size: 10485760   # Taille maximale du fichier de log
-#   backup_count: 5      # Nombre de sauvegardes de logs
-#   level: INFO          # Niveau de log (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+content: /Users/nico/Documents/install
+script: start.sh
+output:
+  path: pcUtils.sh
+  need_root: true
+compression:
+  method: gz
+  level: 9
+  encrypted: true
+  encryption_tool: openssl
+exclude:
+  patterns:
+  - '*.bak'
+  - '*.egg-info/'
+  - '*.log'
+  - '*.pyc'
+  - '*.pyo'
+  - '*.spec'
+  - '*.swp'
+  - '*.tmp'
+  - '*~'
+  - .DS_Store
+  - ._*
+  - .cvs/
+  - .env
+  - .git/
+  - .hg/
+  - .idea/
+  - .project
+  - .settings/
+  - .svn/
+  - .venv/
+  - .vscode/
+  - Thumbs.db
+  - __pycache__/
+  - build/
+  - dist/
+  - env/
+  - venv/
+  ignore_case: true
+hooks:
+  pre_build: []
+  post_build: []
+update:
+  enabled: true
+  version_url: http://localhost/version.json
+  package_url: http://localhost/pcUtils.sh
+  version_file_path: /Library/WebServer/Documents/version.json

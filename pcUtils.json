@@ -1,0 +1,28 @@
+{
+  "nvbuilder_version": "2.0.28",
+  "build_version": "20250413235357",
+  "created_at": "2025-04-13T23:53:57.319391",
+  "python_version": "3.9.6",
+  "platform": "darwin",
+  "build_host": "Nicos-MacBook-Pro.local",
+  "build_user": "nico",
+  "archive_checksum_sha256": "7b2a06ad88282fa2a2f0ac5d7dac21f593d9048cdb78ffc992351ec7d5a3c30f",
+  "encrypted_archive_checksum_sha256": "28c94d56f2a88f6f13d277c20665ccbce017da909dbc9ca64abb27a17f67b43a",
+  "script_checksum_sha256": "2437242ef4fce6e63bb8b7645642808fb620a85c8dfbd9c088d419fc3b1adb10",
+  "password_check_token_b64": "U2FsdGVkX19zOu0y2euyvcwhp+kMAOmaL3R+4BZ+XYfh1ZIoUtW+WbtSJlVk7L9T",
+  "token_encryption_params": {
+    "tool": "openssl",
+    "cipher": "aes-256-cbc",
+    "iter": 10000
+  },
+  "content_source_dir": "/Users/nico/Documents/install",
+  "post_extraction_script": "start.sh",
+  "update_enabled": true,
+  "encryption_enabled": true,
+  "encryption_tool": "openssl",
+  "archive_size": 10338758,
+  "encrypted_archive_path": "/var/folders/p6/59z1nbhd0wx4cvc0jmm1y8080000gn/T/nvb_archive__szznsjv/content.tar.gz.enc",
+  "files_included_count": 183,
+  "files_excluded_count": 64,
+  "encrypted_size": 10338784
+}
