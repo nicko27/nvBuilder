@@ -23,6 +23,7 @@ exclude:
   - ._*
   - .cvs/
   - .env
+  - .git
   - .git/
   - .hg/
   - .idea/
@@ -46,3 +47,4 @@ update:
   version_url: http://localhost/version.json
   package_url: http://localhost/pcUtils.sh
   version_file_path: /Library/WebServer/Documents/version.json
+  mode: auto-replace

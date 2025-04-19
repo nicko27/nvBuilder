@@ -37,6 +37,7 @@ class ScriptGenerator:
         self.config = config
         self.metadata = metadata
         self.package_dir = Path(__file__).parent.resolve()
+        self.debug_mode = config.get('debug_mode', False)
 
     def generate(self, archive_to_embed_path: Path, archive_original_filename: str, 
                 tar_command_flags: str, bash_snippets: Dict[str, str]) -> Path:
@@ -90,7 +91,9 @@ class ScriptGenerator:
             TemplateError: Si le template est introuvable ou invalide
         """
         template_path = self.package_dir / TEMPLATE_FILENAME
-        logger.debug(f"Chargement template: {template_path}")
+        
+        if self.debug_mode:
+            logger.debug(f"Chargement template: {template_path}")
         
         if not template_path.is_file():
             raise TemplateError(f"Template introuvable: {template_path}")
@@ -107,7 +110,8 @@ class ScriptGenerator:
                 
             # S'assurer qu'il y a un saut de ligne à la fin
             if not content.endswith("\n"):
-                logger.warning("Ajout newline final après %%ARCHIVE_MARKER%%.")
+                if self.debug_mode:
+                    logger.warning("Ajout newline final après %%ARCHIVE_MARKER%%.")
                 content = content.rstrip() + "\n"
                 
             return content
@@ -130,7 +134,10 @@ class ScriptGenerator:
         Raises:
             BuildProcessError: Si l'encodage échoue
         """
-        logger.info(f"Encodage Base64 de '{archive_path.name}'...")
+        if self.debug_mode:
+            logger.info(f"Encodage Base64 de '{archive_path.name}'...")
+        else:
+            print("Préparation de l'archive...", end=" ", flush=True)
         
         try:
             # Lire l'archive en binaire
@@ -141,7 +148,11 @@ class ScriptGenerator:
             
             # Log du succès
             size_mb = len(encoded_data)/1024/1024
-            logger.info(f"-> Encodage Base64 {Fore.GREEN}OK{Style.RESET_ALL} (Taille: {size_mb:.2f} Mo)")
+            
+            if self.debug_mode:
+                logger.info(f"-> Encodage Base64 {Fore.GREEN}OK{Style.RESET_ALL} (Taille: {size_mb:.2f} Mo)")
+            else:
+                print(f"{Fore.GREEN}OK{Style.RESET_ALL}")
             
             return encoded_data
             
@@ -149,7 +160,7 @@ class ScriptGenerator:
             raise BuildProcessError(f"Erreur encodage B64 {archive_path}: {e}") from e
 
     def _prepare_replacements(self, archive_original_filename: str, 
-                             tar_command_flags: str, bash_snippets: Dict[str, str]) -> Dict[str, str]:
+                            tar_command_flags: str, bash_snippets: Dict[str, str]) -> Dict[str, str]:
         """
         Prépare le dictionnaire de remplacements pour les placeholders du template.
         
@@ -177,7 +188,12 @@ class ScriptGenerator:
         enc_enabled = self.metadata.get('encryption_enabled', False)
         enc_tool = self.metadata.get('encryption_tool') or "N/A"
         upd_enabled = self.metadata.get('update_enabled', False)
+        upd_mode = self.metadata.get('update_mode', 'check-only')
         url_display = self.config.get('update', {}).get('version_url', '') or 'N/A'
+        
+        # Information de mise à jour
+        version_url = self.config.get('update', {}).get('version_url', '')
+        package_url = self.config.get('update', {}).get('package_url', '')
         
         # Construire le dictionnaire de remplacements
         replacements = {
@@ -188,6 +204,11 @@ class ScriptGenerator:
             "%%PLATFORM_BUILD%%": self.metadata.get('platform', 'N/A'),
             "%%PYTHON_VERSION_DISPLAY%%": py_display,
             "%%BUILD_VERSION%%": self.metadata.get('build_version', 'N/A'),
+            
+            # Variables de mise à jour (nouvelles variables directes)
+            "%%UPDATE_VERSION_URL%%": version_url,
+            "%%UPDATE_PACKAGE_URL%%": package_url,
+            "%%UPDATE_MODE%%": upd_mode,
             
             # Configuration archive et extraction
             "%%ARCHIVE_MARKER%%": ARCHIVE_MARKER,
@@ -207,12 +228,7 @@ class ScriptGenerator:
             "%%BASH_ENCRYPTION_ENABLED_BOOL%%": "true" if enc_enabled else "false",
             "%%BASH_UPDATE_ENABLED_BOOL%%": "true" if upd_enabled else "false",
             
-            # Snippets bash
-            "%%BASH_UPDATE_VARS%%": bash_snippets.get("update_vars", ""),
-            "%%BASH_UPDATE_ARG_PARSING%%": bash_snippets.get("update_arg_parsing", ""),
-            "%%BASH_UPDATE_HELP%%": bash_snippets.get("update_help", ""),
-            "%%BASH_UPDATE_CHECK_CALL%%": bash_snippets.get("update_check_call", ""),
-            "%%BASH_UPDATE_FUNCTION%%": bash_snippets.get("update_function", ""),
+            # Snippets bash - nous supprimons "%%BASH_UPDATE_VARS%%" car nous l'intégrons directement
             "%%BASH_ENCRYPTION_VARS%%": bash_snippets.get("encryption_vars", ""),
             "%%BASH_DECRYPTION_LOGIC%%": bash_snippets.get("decryption_logic", ""),
             "%%BASH_DECRYPTION_CLEANUP%%": bash_snippets.get("decryption_cleanup", "")
@@ -234,7 +250,9 @@ class ScriptGenerator:
         Raises:
             TemplateError: Si des placeholders ne sont pas remplacés
         """
-        logger.debug("Application des remplacements au template...")
+        if self.debug_mode:
+            logger.debug("Application des remplacements au template...")
+        
         final_content = template_content
         
         # Appliquer chaque remplacement
@@ -262,7 +280,10 @@ class ScriptGenerator:
         Raises:
             BuildProcessError: Si l'écriture échoue
         """
-        logger.info(f"Écriture script -> {output_path}")
+        if self.debug_mode:
+            logger.info(f"Écriture script -> {output_path}")
+        else:
+            print("Génération du script final...", end=" ", flush=True)
         
         try:
             # Créer les répertoires parents si nécessaire
@@ -279,7 +300,8 @@ class ScriptGenerator:
                     script_content = clean_content_end + "\n"
                 else:
                     # Le marqueur est complètement absent ou incorrect
-                    logger.error(f"FIN ATTENDUE:\n{expected_ending}\nFIN REELLE:\n{script_content[-100:]}")
+                    if self.debug_mode:
+                        logger.error(f"FIN ATTENDUE:\n{expected_ending}\nFIN REELLE:\n{script_content[-100:]}")
                     raise BuildProcessError("Contenu final script ne finit pas par marqueur unique.")
             
             # Écrire le contenu du script suivi des données base64 et d'un saut de ligne final
@@ -291,7 +313,12 @@ class ScriptGenerator:
             # Rendre le script exécutable
             os.chmod(output_path, 0o755)
             
-            logger.info(f"-> Écriture script {Fore.GREEN}OK{Style.RESET_ALL}")
+            if self.debug_mode:
+                logger.info(f"-> Écriture script {Fore.GREEN}OK{Style.RESET_ALL}")
+            else:
+                print(f"{Fore.GREEN}OK{Style.RESET_ALL}")
             
         except Exception as e:
+            if self.debug_mode:
+                logger.error(f"Erreur d'écriture du script '{output_path}': {e}")
             raise BuildProcessError(f"Erreur écriture script '{output_path}': {e}") from e

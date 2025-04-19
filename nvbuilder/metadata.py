@@ -9,8 +9,7 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional
 import json
 import logging
-
-from .constants import VERSION, DEFAULT_ENCRYPTION_TOOL
+from .constants import VERSION, DEFAULT_ENCRYPTION_TOOL, DEFAULT_UPDATE_MODE
 from .utils import get_absolute_path
 
 logger = logging.getLogger("nvbuilder")
@@ -19,18 +18,31 @@ class MetadataManager:
     """Collecte et gère les métadonnées du processus de build."""
 
     def __init__(self, config: Dict[str, Any], build_version: str):
+        """
+        Initialise le gestionnaire de métadonnées.
+        
+        Args:
+            config: Configuration du build
+            build_version: Version unique du build
+        """
         self.config = config
         self.build_version = build_version
+        self.debug_mode = config.get('debug_mode', False)
         self.data: Dict[str, Any] = self._initialize()
 
     def _initialize(self) -> Dict[str, Any]:
         """Initialise le dictionnaire de métadonnées."""
         encryption_enabled = self.config.get('compression', {}).get('encrypted', False)
         update_enabled = self.config.get('update', {}).get('enabled', False)
+        update_mode = self.config.get('update', {}).get('mode', DEFAULT_UPDATE_MODE)
         
         # Log d'avertissement pour la configuration chiffrement + mises à jour
         if update_enabled and encryption_enabled:
-             logger.warning("MàJ HTTP et Chiffrement activés. Vérification de version et d'intégrité activée.")
+            if self.debug_mode:
+                if update_mode == "auto-replace":
+                    logger.warning("MàJ HTTP (mode auto-replace) et Chiffrement activés. Cela nécessitera une saisie de mot de passe.")
+                else:
+                    logger.warning("MàJ HTTP et Chiffrement activés. Vérification de version et d'intégrité activée.")
 
         metadata = {
             "nvbuilder_version": VERSION,
@@ -52,6 +64,7 @@ class MetadataManager:
             "content_source_dir": str(self.config.get('content', './content')),
             "post_extraction_script": self.config.get('script', 'install.sh'),
             "update_enabled": update_enabled,
+            "update_mode": update_mode if update_enabled else None,
             "encryption_enabled": encryption_enabled,
             "encryption_tool": None,
             "archive_size": 0,
@@ -59,8 +72,8 @@ class MetadataManager:
         }
         
         if metadata["encryption_enabled"]:
-             metadata["encryption_tool"] = self.config.get('compression', {}).get('encryption_tool', DEFAULT_ENCRYPTION_TOOL)
-             
+            metadata["encryption_tool"] = self.config.get('compression', {}).get('encryption_tool', DEFAULT_ENCRYPTION_TOOL)
+            
         return metadata
 
     def update(self, key: str, value: Any):
@@ -120,15 +133,20 @@ class MetadataManager:
         try:
             with open(metadata_output_path, 'w', encoding='utf-8') as f:
                 json.dump(public_data, f, indent=2, ensure_ascii=False)
-            logger.info(f"Fichier metadata généré: {metadata_output_path}")
+            
+            if self.debug_mode:
+                logger.info(f"Fichier metadata généré: {metadata_output_path}")
         except Exception as e:
-            logger.warning(f"Génération {metadata_output_path} échouée: {e}")
+            # Message d'erreur uniquement en mode debug
+            if self.debug_mode:
+                logger.warning(f"Génération {metadata_output_path} échouée: {e}")
 
     def write_version_file(self):
         """Génère le fichier version.json pour les mises à jour."""
         version_file_path_str = self.config.get('update', {}).get('version_file_path')
         if not version_file_path_str:
-            logger.debug("Chemin version.json non spécifié.")
+            if self.debug_mode:
+                logger.debug("Chemin version.json non spécifié.")
             return
 
         config_dir = self.config.get('_config_dir', Path('.'))
@@ -175,7 +193,10 @@ class MetadataManager:
             with open(output_path, 'w', encoding='utf-8') as f:
                 json.dump(v_data_final, f, indent=2, ensure_ascii=False)
                 
-            logger.info(f"Fichier version généré: {output_path}")
+            if self.debug_mode:
+                logger.info(f"Fichier version généré: {output_path}")
             
         except Exception as e:
-            logger.error(f"Err génération version.json '{output_path}': {e}")
+            # Message d'erreur uniquement en mode debug
+            if self.debug_mode:
+                logger.error(f"Err génération version.json '{output_path}': {e}")
