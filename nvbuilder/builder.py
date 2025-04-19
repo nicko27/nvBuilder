@@ -21,17 +21,13 @@ from .utils import get_absolute_path, get_standard_exclusions, calculate_checksu
 from .exceptions import NvBuilderError, ConfigError, EncryptionError, ToolNotFoundError
 from .constants import VERSION,DEFAULT_UPDATE_MODE, PASSWORD_CHECK_TOKEN, DEFAULT_OPENSSL_CIPHER, DEFAULT_OPENSSL_ITER, DEFAULT_GPG_CIPHER_ALGO, DEFAULT_GPG_S2K_OPTIONS
 
-# Gestion de colorama avec fallback
-try:
-    from colorama import Fore, Style, init as colorama_init
-    colorama_init()  # Initialiser ici aussi au cas où __main__ ne serait pas appelé
-except ImportError:
-    # Créer des substituts vides si colorama n'est pas là
-    class DummyColorama:
-        def __getattr__(self, name): return ""
-    Fore = Style = DummyColorama()
-    # Définir RESET_ALL comme chaîne vide pour éviter erreurs
-    Style.RESET_ALL = ""
+# Import des couleurs sémantiques
+from .colors import (
+    ERROR_COLOR, SUCCESS_COLOR, WARNING_COLOR, INFO_COLOR, DETAIL_COLOR,
+    UPDATE_COLOR, DEBUG_COLOR, HEADER_COLOR, BANNER_COLOR, FILENAME_COLOR,
+    PATH_COLOR, OPTION_COLOR, KEY_COLOR, VALUE_COLOR, 
+    HIGHLIGHT_STYLE, SUBTLE_STYLE, RESET_STYLE
+)
 
 logger = logging.getLogger("nvbuilder")  # Récupérer le logger configuré
 
@@ -68,7 +64,7 @@ class NvBuilder:
         setup_logging(self.config.get('logging', {}), self.base_dir)
 
         if debug_mode:
-            logger.info(f"{Style.BRIGHT}--- Début du Build (Mode Debug) ---{Style.RESET_ALL}")
+            logger.info(f"{HIGHLIGHT_STYLE}--- Début du Build (Mode Debug) ---{RESET_STYLE}")
             logger.info(f"Fichier configuration : {self.config_path}")
 
         if use_standard_exclusions:
@@ -85,14 +81,6 @@ class NvBuilder:
     def _display_config_summary(self):
         """Affiche un résumé de la configuration utilisée pour le build."""
         # Définir des alias de couleurs pour une meilleure lisibilité
-        BLUE = Fore.BLUE
-        GREEN = Fore.GREEN
-        YELLOW = Fore.YELLOW
-        CYAN = Fore.CYAN
-        MAGENTA = Fore.MAGENTA
-        BRIGHT = Style.BRIGHT
-        DIM = Style.DIM
-        RESET = Style.RESET_ALL
         
         # Extraction des informations principales
         content_dir = self.config.get('content', './content')
@@ -110,66 +98,70 @@ class NvBuilder:
         exclude_patterns = self.config.get('exclude', {}).get('patterns', [])
         
         # Afficher la bannière de résumé de configuration
-        print(f"{BLUE}{BRIGHT}RÉSUMÉ DE CONFIGURATION{RESET}")
-        print(f"{BLUE}{BRIGHT}-----------------------{RESET}")
+        print(f"{INFO_COLOR}{HIGHLIGHT_STYLE}RÉSUMÉ DE LA CONFIGURATION{RESET_STYLE}")
+        print(f"{INFO_COLOR}{HIGHLIGHT_STYLE}-----------------------{RESET_STYLE}")
         
         # Paramètres généraux
-        print(f"\n{BLUE}{BRIGHT}Paramètres généraux:{RESET}")
-        print(f"  {BRIGHT}• Source:{RESET}       {CYAN}{content_dir}{RESET}")
-        print(f"  {BRIGHT}• Destination:{RESET}  {CYAN}{output_path}{RESET}")
+        print(f"\n{INFO_COLOR}{HIGHLIGHT_STYLE}Paramètres généraux:{RESET_STYLE}")
+        print(f"  {HIGHLIGHT_STYLE}• Source:{RESET_STYLE}           {DETAIL_COLOR}{content_dir}{RESET_STYLE}")
+        print(f"  {HIGHLIGHT_STYLE}• Destination:{RESET_STYLE}      {DETAIL_COLOR}{output_path}{RESET_STYLE}")
         if post_script:
-            print(f"  {BRIGHT}• Script post-ext:{RESET} {CYAN}{post_script}{RESET}")
+            print(f"  {HIGHLIGHT_STYLE}• Script post-ext:{RESET_STYLE}  {DETAIL_COLOR}{post_script}{RESET_STYLE}")
         else:
-            print(f"  {BRIGHT}• Script post-ext:{RESET} {DIM}Aucun{RESET}")
+            print(f"  {HIGHLIGHT_STYLE}• Script post-ext:{RESET_STYLE}  {SUBTLE_STYLE}Aucun{RESET_STYLE}")
+        
+        # Afficher si les droits root sont requis
+        need_root = self.config.get('output', {}).get('need_root', False)
+        print(f"  {HIGHLIGHT_STYLE}• Droits root:{RESET_STYLE}      {SUCCESS_COLOR}Requis{RESET_STYLE}" if need_root else f"  {HIGHLIGHT_STYLE}• Droits root:{RESET_STYLE}  {WARNING_COLOR}Non requis{RESET_STYLE}")
         
         # Compression et chiffrement
-        print(f"\n{BLUE}{BRIGHT}Compression et sécurité:{RESET}")
+        print(f"\n{INFO_COLOR}{HIGHLIGHT_STYLE}Compression et sécurité:{RESET_STYLE}")
         comp_display = f"{comp_method}" if comp_method == 'none' else f"{comp_method} (niveau {comp_level})"
-        print(f"  {BRIGHT}• Compression:{RESET}  {CYAN}{comp_display}{RESET}")
+        print(f"  {HIGHLIGHT_STYLE}• Compression:{RESET_STYLE}   {DETAIL_COLOR}{comp_display}{RESET_STYLE}")
         
         if is_encrypted:
-            print(f"  {BRIGHT}• Chiffrement:{RESET}  {GREEN}Activé{RESET} ({encryption_tool})")
+            print(f"  {HIGHLIGHT_STYLE}• Chiffrement:{RESET_STYLE}   {SUCCESS_COLOR}Activé{RESET_STYLE} ({encryption_tool})")
         else:
-            print(f"  {BRIGHT}• Chiffrement:{RESET}  {YELLOW}Désactivé{RESET}")
+            print(f"  {HIGHLIGHT_STYLE}• Chiffrement:{RESET_STYLE}   {WARNING_COLOR}Désactivé{RESET_STYLE}")
         
         # Mise à jour
-        print(f"\n{BLUE}{BRIGHT}Mise à jour:{RESET}")
+        print(f"\n{INFO_COLOR}{HIGHLIGHT_STYLE}Mise à jour:{RESET_STYLE}")
         if update_enabled:
-            print(f"  {BRIGHT}• Statut:{RESET}        {GREEN}Activée{RESET}")
-            print(f"  {BRIGHT}• Mode:{RESET}          {CYAN}{update_mode}{RESET}")
-            print(f"  {BRIGHT}• URL version:{RESET}   {CYAN}{update_url}{RESET}")
+            print(f"  {HIGHLIGHT_STYLE}• Statut:{RESET_STYLE}        {SUCCESS_COLOR}Activée{RESET_STYLE}")
+            print(f"  {HIGHLIGHT_STYLE}• Mode:{RESET_STYLE}          {DETAIL_COLOR}{update_mode}{RESET_STYLE}")
+            print(f"  {HIGHLIGHT_STYLE}• URL version:{RESET_STYLE}   {DETAIL_COLOR}{update_url}{RESET_STYLE}")
         else:
-            print(f"  {BRIGHT}• Statut:{RESET}        {YELLOW}Désactivée{RESET}")
+            print(f"  {HIGHLIGHT_STYLE}• Statut:{RESET_STYLE}        {WARNING_COLOR}Désactivée{RESET_STYLE}")
         
         # Hooks
-        print(f"\n{BLUE}{BRIGHT}Hooks:{RESET}")
+        print(f"\n{INFO_COLOR}{HIGHLIGHT_STYLE}Hooks:{RESET_STYLE}")
         if hooks_pre or hooks_post:
             if hooks_pre:
-                print(f"  {BRIGHT}• Pre-build:{RESET}    {GREEN}{len(hooks_pre)} hook(s){RESET}")
+                print(f"  {HIGHLIGHT_STYLE}• Pre-build:{RESET_STYLE}    {SUCCESS_COLOR}{len(hooks_pre)} hook(s){RESET_STYLE}")
             if hooks_post:
-                print(f"  {BRIGHT}• Post-build:{RESET}   {GREEN}{len(hooks_post)} hook(s){RESET}")
+                print(f"  {HIGHLIGHT_STYLE}• Post-build:{RESET_STYLE}   {SUCCESS_COLOR}{len(hooks_post)} hook(s){RESET_STYLE}")
         else:
-            print(f"  {BRIGHT}• Hooks:{RESET}        {DIM}Aucun{RESET}")
+            print(f"  {HIGHLIGHT_STYLE}• Hooks:{RESET_STYLE}        {SUBTLE_STYLE}Aucun{RESET_STYLE}")
         
         # Exclusions
-        print(f"\n{BLUE}{BRIGHT}Exclusions:{RESET}")
+        print(f"\n{INFO_COLOR}{HIGHLIGHT_STYLE}Exclusions:{RESET_STYLE}")
         exclude_count = len(exclude_patterns)
         if exclude_count > 0:
-            print(f"  {BRIGHT}• Motifs:{RESET}       {GREEN}{exclude_count} exclusion(s){RESET}")
+            print(f"  {HIGHLIGHT_STYLE}• Motifs:{RESET_STYLE}       {SUCCESS_COLOR}{exclude_count} exclusion(s){RESET_STYLE}")
             if self.debug_mode or exclude_count <= 5:
                 # Montrer toutes les exclusions en mode debug ou s'il y en a peu
                 for pattern in exclude_patterns[:5]:
-                    print(f"    {CYAN}∙ {pattern}{RESET}")
+                    print(f"    {DETAIL_COLOR}∙ {pattern}{RESET_STYLE}")
                 if exclude_count > 5:
-                    print(f"    {DIM}... et {exclude_count - 5} autres{RESET}")
+                    print(f"    {SUBTLE_STYLE}... et {exclude_count - 5} autres{RESET_STYLE}")
         else:
-            print(f"  {BRIGHT}• Motifs:{RESET}       {DIM}Aucun{RESET}")
+            print(f"  {HIGHLIGHT_STYLE}• Motifs:{RESET_STYLE}       {SUBTLE_STYLE}Aucun{RESET_STYLE}")
         
         # Information sur la génération
-        print(f"\n{BLUE}{BRIGHT}Informations de build:{RESET}")
-        print(f"  {BRIGHT}• Version:{RESET}      {CYAN}NvBuilder v{VERSION}{RESET}")
-        print(f"  {BRIGHT}• Build ID:{RESET}     {CYAN}{self.build_version}{RESET}")
-        print(f"  {BRIGHT}• Plateforme:{RESET}   {CYAN}{platform.system()} {platform.release()}{RESET}")
+        print(f"\n{INFO_COLOR}{HIGHLIGHT_STYLE}Informations de build:{RESET_STYLE}")
+        print(f"  {HIGHLIGHT_STYLE}• Version:{RESET_STYLE}      {DETAIL_COLOR}NvBuilder v{VERSION}{RESET_STYLE}")
+        print(f"  {HIGHLIGHT_STYLE}• Build ID:{RESET_STYLE}     {DETAIL_COLOR}{self.build_version}{RESET_STYLE}")
+        print(f"  {HIGHLIGHT_STYLE}• Plateforme:{RESET_STYLE}   {DETAIL_COLOR}{platform.system()} {platform.release()}{RESET_STYLE}")
         
     def _get_encryption_password(self) -> bool:
         """
@@ -178,14 +170,6 @@ class NvBuilder:
         Returns:
             bool: True si la saisie a réussi, False sinon
         """
-        BLUE = Fore.BLUE
-        GREEN = Fore.GREEN
-        YELLOW = Fore.YELLOW
-        CYAN = Fore.CYAN
-        MAGENTA = Fore.MAGENTA
-        BRIGHT = Style.BRIGHT
-        DIM = Style.DIM
-        RESET = Style.RESET_ALL        
         if not self.metadata_manager.get('encryption_enabled'):
             if self.debug_mode:
                 logger.info("Chiffrement: Désactivé")
@@ -197,15 +181,15 @@ class NvBuilder:
         try:
             while True:
                 # Utiliser sys.stdout.write pour contrôle fin + flush
-                print(f"\n{BLUE}{BRIGHT}Décryptage de l'archive{RESET}")
-                sys.stdout.write("Entrez le mot de passe pour le chiffrement : ")
+                print(f"\n{INFO_COLOR}{HIGHLIGHT_STYLE}Cryptage de l'archive{RESET_STYLE}")
+                sys.stdout.write(f"   • Entrez le mot de passe pour le chiffrement : {RESET_STYLE}")
                 sys.stdout.flush()
                 pwd1 = getpass.getpass(prompt='')  # Prompt vide car déjà affiché
                 if not pwd1:
-                    print(f"{Fore.YELLOW}Mot de passe vide interdit.{Style.RESET_ALL}")
+                    print(f"{WARNING_COLOR}Mot de passe vide interdit.{RESET_STYLE}")
                     continue
                     
-                sys.stdout.write("Confirmez le mot de passe : ")
+                sys.stdout.write(f"   • Confirmez le mot de passe : {RESET_STYLE}")
                 sys.stdout.flush()
                 pwd2 = getpass.getpass(prompt='')
                 
@@ -213,7 +197,7 @@ class NvBuilder:
                     self.password = pwd1
                     return True
                 else:
-                    print(f"{Fore.RED}Mots de passe différents. Réessayez.{Style.RESET_ALL}")
+                    print(f"{ERROR_COLOR}Mots de passe différents. Réessayez.{RESET_STYLE}")
         except EOFError:
             logger.error("Lecture mdp impossible (non interactif?).")
             return False
@@ -239,7 +223,7 @@ class NvBuilder:
             return
             
         if self.debug_mode:
-            logger.info(f"{Style.BRIGHT}--- Exécution Hooks '{hook_type}' ---{Style.RESET_ALL}")
+            logger.info(f"{HIGHLIGHT_STYLE}--- Exécution Hooks '{hook_type}' ---{RESET_STYLE}")
         
         import subprocess
         success = True
@@ -247,7 +231,7 @@ class NvBuilder:
         for cmd in hooks:
             try:
                 if self.debug_mode:
-                    logger.info(f"  -> Exécution: {cmd}")
+                    logger.info(f"  • Exécution: {cmd}")
                 
                 result = subprocess.run(cmd, shell=True, check=True, capture_output=True, 
                                         text=True, encoding='utf-8', cwd=self.base_dir)
@@ -256,25 +240,25 @@ class NvBuilder:
                     if result.stdout:
                         logger.debug(f"Hook stdout:\n{result.stdout.strip()}")
                     if result.stderr:
-                        logger.warning(f"{Fore.YELLOW}Hook stderr:\n{result.stderr.strip()}{Style.RESET_ALL}")
+                        logger.warning(f"{WARNING_COLOR}Hook stderr:\n{result.stderr.strip()}{RESET_STYLE}")
                     
             except FileNotFoundError:
-                logger.error(f"{Fore.RED}Hook Erreur: Commande '{cmd.split()[0]}' non trouvée.{Style.RESET_ALL}")
+                logger.error(f"{ERROR_COLOR}Hook Erreur: Commande '{cmd.split()[0]}' non trouvée.{RESET_STYLE}")
                 success = False
             except subprocess.CalledProcessError as e:
-                logger.error(f"{Fore.RED}Hook Échec (code {e.returncode}): {cmd}{Style.RESET_ALL}")
+                logger.error(f"{ERROR_COLOR}Hook Échec (code {e.returncode}): {cmd}{RESET_STYLE}")
                 if e.stdout:
                     logger.error(f"Hook stdout:\n{e.stdout.strip()}")
                 if e.stderr:
                     logger.error(f"Hook stderr:\n{e.stderr.strip()}")
                 success = False
             except Exception as e:
-                logger.error(f"{Fore.RED}Hook Erreur '{cmd}': {e}{Style.RESET_ALL}")
+                logger.error(f"{ERROR_COLOR}Hook Erreur '{cmd}': {e}{RESET_STYLE}")
                 success = False
                 
         if self.debug_mode:
-            status = f"{Fore.GREEN}OK" if success else f"{Fore.RED}ÉCHEC"
-            logger.info(f"{Style.BRIGHT}--- Fin Hooks '{hook_type}' ({status}{Style.RESET_ALL}{Style.BRIGHT}) ---{Style.RESET_ALL}")
+            status = f"{SUCCESS_COLOR}OK" if success else f"{ERROR_COLOR}ÉCHEC"
+            logger.info(f"{HIGHLIGHT_STYLE}--- Fin Hooks '{hook_type}' ({status}{RESET_STYLE}{HIGHLIGHT_STYLE}) ---{RESET_STYLE}")
         
         if not success:
             raise NvBuilderError(f"Échec lors de l'exécution des hooks {hook_type}.")
@@ -315,7 +299,7 @@ class NvBuilder:
 
             # Étape 1: Créer l'archive
             if self.debug_mode:
-                logger.info(f"{Style.BRIGHT}--- Étape 1: Création Archive ---{Style.RESET_ALL}")
+                logger.info(f"{HIGHLIGHT_STYLE}--- Étape 1: Création Archive ---{RESET_STYLE}")
             
             archiver = Archiver(self.config, self.metadata_manager)
             archive_path, basename, ext, tar_flag = archiver.create()
@@ -327,7 +311,7 @@ class NvBuilder:
             # Étape 2: Chiffrer l'archive si demandé
             if self.metadata_manager.get('encryption_enabled'):
                 if self.debug_mode:
-                    logger.info(f"{Style.BRIGHT}--- Étape 2: Chiffrement ---{Style.RESET_ALL}")
+                    logger.info(f"{HIGHLIGHT_STYLE}--- Étape 2: Chiffrement ---{RESET_STYLE}")
                 
                 encryptor = Encryptor(self.config)
                 try:
@@ -375,7 +359,7 @@ class NvBuilder:
 
             # Étape 3: Préparer les snippets Bash
             if self.debug_mode:
-                logger.info(f"{Style.BRIGHT}--- Étape 3: Préparation Script Bash ---{Style.RESET_ALL}")
+                logger.info(f"{HIGHLIGHT_STYLE}--- Étape 3: Préparation Script Bash ---{RESET_STYLE}")
             
             metadata_dict = self.metadata_manager.get_all()
             
@@ -387,7 +371,7 @@ class NvBuilder:
 
             # Étape 4: Générer le script final
             if self.debug_mode:
-                logger.info(f"{Style.BRIGHT}--- Étape 4: Génération Script Final ---{Style.RESET_ALL}")
+                logger.info(f"{HIGHLIGHT_STYLE}--- Étape 4: Génération Script Final ---{RESET_STYLE}")
             
             script_generator = ScriptGenerator(self.config, metadata_dict)
             tar_command_flags = "x" + tar_flag + "f"
@@ -395,7 +379,7 @@ class NvBuilder:
 
             # Étape 5: Finalisation (Hash, Fichiers annexes)
             if self.debug_mode:
-                logger.info(f"{Style.BRIGHT}--- Étape 5: Finalisation (Hash, Fichiers Annexes) ---{Style.RESET_ALL}")
+                logger.info(f"{HIGHLIGHT_STYLE}--- Étape 5: Finalisation (Hash, Fichiers Annexes) ---{RESET_STYLE}")
             
             script_hash = calculate_checksum(output_script_path)
             self.metadata_manager.update('script_checksum_sha256', script_hash)
@@ -415,7 +399,7 @@ class NvBuilder:
                 end_time = time.time()
                 duration = end_time - self.start_time
                 final_size_mb = output_script_path.stat().st_size / (1024 * 1024)
-                logger.info(f"{Fore.GREEN}{Style.BRIGHT}--- Build Terminé (Mode Debug) ---{Style.RESET_ALL}")
+                logger.info(f"{SUCCESS_COLOR}{HIGHLIGHT_STYLE}--- Build Terminé (Mode Debug) ---{RESET_STYLE}")
                 logger.info(f"Durée du build: {duration:.2f}s")
                 logger.info(f"Script généré : {output_script_path} ({final_size_mb:.2f} Mo)")
                 
@@ -428,19 +412,19 @@ class NvBuilder:
         except NvBuilderError as e:
             # Erreur attendue (avec message explicite)
             if self.debug_mode:
-                logger.error(f"{Fore.RED}{Style.BRIGHT}--- Échec du Build ---{Style.RESET_ALL}")
-                logger.error(f"{Fore.RED}Erreur: {e}{Style.RESET_ALL}")
+                logger.error(f"{ERROR_COLOR}{HIGHLIGHT_STYLE}--- Échec du Build ---{RESET_STYLE}")
+                logger.error(f"{ERROR_COLOR}Erreur: {e}{RESET_STYLE}")
             else:
-                print(f"{Fore.RED}Échec du Build: {e}{Style.RESET_ALL}", file=sys.stderr)
+                print(f"{ERROR_COLOR}Échec du Build: {e}{RESET_STYLE}", file=sys.stderr)
             return None
         except Exception as e:
             # Erreur inattendue (avec traceback complet)
             if self.debug_mode:
-                logger.error(f"{Fore.RED}{Style.BRIGHT}--- Échec du Build (Erreur Inattendue) ---{Style.RESET_ALL}")
-                logger.error(f"{Fore.RED}Erreur: {e}{Style.RESET_ALL}")
+                logger.error(f"{ERROR_COLOR}{HIGHLIGHT_STYLE}--- Échec du Build (Erreur Inattendue) ---{RESET_STYLE}")
+                logger.error(f"{ERROR_COLOR}Erreur: {e}{RESET_STYLE}")
                 logger.critical("Traceback:", exc_info=True)
             else:
-                print(f"{Fore.RED}Erreur inattendue lors du build.{Style.RESET_ALL}", file=sys.stderr)
+                print(f"{ERROR_COLOR}Erreur inattendue lors du build.{RESET_STYLE}", file=sys.stderr)
             return None
         finally:
             # Nettoyage final

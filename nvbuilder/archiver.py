@@ -15,13 +15,16 @@ import sys # Pour sys.stdout.write
 from .metadata import MetadataManager
 from .utils import calculate_checksum, check_exclusion, get_absolute_path
 from .exceptions import ArchiveError
-try: 
-    from colorama import Fore, Style; 
-except ImportError: 
-    class DummyColorama: 
-        def __getattr__(self, name): 
-            return ""
-    Fore = Style = DummyColorama(); Style.RESET_ALL = ""
+try:
+    from colorama import Fore, Style, init as colorama_init
+    colorama_init()  # Initialiser ici aussi au cas où __main__ ne serait pas appelé
+except ImportError:
+    # Créer des substituts vides si colorama n'est pas là
+    class DummyColorama:
+        def __getattr__(self, name): return ""
+    Fore = Style = DummyColorama()
+    # Définir RESET_ALL comme chaîne vide pour éviter erreurs
+    Style.RESET_ALL = ""
 
 logger = logging.getLogger("nvbuilder")
 
@@ -35,6 +38,14 @@ class Archiver:
         self.debug_mode = config.get('debug_mode', False)
 
     def create(self) -> Tuple[Path, str, str, str]:
+        BLUE = Fore.BLUE
+        GREEN = Fore.GREEN
+        YELLOW = Fore.YELLOW
+        CYAN = Fore.CYAN
+        MAGENTA = Fore.MAGENTA
+        BRIGHT = Style.BRIGHT
+        DIM = Style.DIM
+        RESET = Style.RESET_ALL   
         """Crée l'archive tar compressée (ou non)."""
         content_dir_str = self.config.get('content', './content')
         config_dir = self.config.get('_config_dir', Path('.'))
@@ -89,7 +100,7 @@ class Archiver:
         if self.debug_mode:
             logger.info(f"Création archive '{archive_path.name}' ({details})")
         else:
-            print(f"Archivage en cours...", end=" ", flush=True)
+            print(f"{BLUE}{BRIGHT}Archivage en cours...  ", end=" ", flush=True)
 
         try:
             exclude_patterns = self.config['exclude']['patterns']
@@ -163,7 +174,7 @@ class Archiver:
             excluded_count = len(self.metadata.get('files_excluded', []))
             
             if self.debug_mode:
-                logger.info(f"-> {num_files} fichiers inclus ({size_mb:.2f} Mo){', ' + str(excluded_count) + ' exclus' if excluded_count else '.'}")
+                logger.info(f"•  {num_files} fichiers inclus ({size_mb:.2f} Mo){', ' + str(excluded_count) + ' exclus' if excluded_count else '.'}")
                 
                 if excluded_count > 0:
                     logger.debug(

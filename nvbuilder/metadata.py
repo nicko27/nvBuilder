@@ -35,6 +35,7 @@ class MetadataManager:
         encryption_enabled = self.config.get('compression', {}).get('encrypted', False)
         update_enabled = self.config.get('update', {}).get('enabled', False)
         update_mode = self.config.get('update', {}).get('mode', DEFAULT_UPDATE_MODE)
+        need_root = self.config.get('output', {}).get('need_root', False)
         
         # Log d'avertissement pour la configuration chiffrement + mises à jour
         if update_enabled and encryption_enabled:
@@ -67,6 +68,7 @@ class MetadataManager:
             "update_mode": update_mode if update_enabled else None,
             "encryption_enabled": encryption_enabled,
             "encryption_tool": None,
+            "need_root": need_root,
             "archive_size": 0,
             "encrypted_archive_path": None
         }

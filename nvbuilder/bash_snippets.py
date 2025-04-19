@@ -38,11 +38,15 @@ def generate_update_snippets(config: Dict[str, Any], metadata: Dict[str, Any]) -
         snippets["update_function"] = """
 # Fonction intégrée pour vérifier et télécharger les mises à jour
 check_for_updates_and_download_if_needed() {
-    echo "Vérification MàJ depuis $VERSION_URL..."
+    # Masquer les messages en mode normal, sauf en cas d'erreur ou nouvelle version
+    local QUIET_MODE=0
+    [ "$DEBUG_MODE" -eq 0 ] && QUIET_MODE=1
+    
+    debug_log "Vérification MàJ depuis $VERSION_URL..."
+    debug_log "URL Package: $PACKAGE_URL"
+    debug_log "Mode update: $UPDATE_MODE"
     local downloader="" remote_json="" latest_version="" script_checksum="" update_success=0 replace_success=0
     local original_args=("$@")  # Sauvegarder les arguments originaux pour la relance
-    
-    debug_log "Mode de mise à jour configuré: $UPDATE_MODE"
 
     # Déterminer téléchargeur
     if command -v curl &>/dev/null; then 
@@ -50,21 +54,22 @@ check_for_updates_and_download_if_needed() {
     elif command -v wget &>/dev/null; then 
         downloader="wget --quiet --tries=3 -O-"
     else 
-        echo "${YELLOW}Avertissement: curl/wget absents.${RESET}" >&2
-        echo "${YELLOW}Poursuite de l'extraction normale.${RESET}"
+        [ "$QUIET_MODE" -eq 0 ] && echo -e "${YELLOW}Avertissement: curl/wget absents.${RESET}" >&2
+        [ "$QUIET_MODE" -eq 0 ] && echo -e "${YELLOW}Poursuite de l'extraction normale.${RESET}"
         return 0
     fi
 
     # Récupérer JSON distant
+    echo "Vérification des mises à jour..."
     debug_log "Tentative récupération: $VERSION_URL"
     if ! remote_json=$($downloader "$VERSION_URL"); then 
-        echo "${YELLOW}Avertissement: Échec récupération $VERSION_URL.${RESET}" >&2
-        echo "${YELLOW}Poursuite de l'extraction normale.${RESET}"
+        echo -e "${YELLOW}Avertissement: Échec récupération $VERSION_URL.${RESET}" >&2
+        echo -e "${YELLOW}Poursuite de l'extraction normale.${RESET}"
         return 0
     fi
     if [ -z "$remote_json" ]; then 
-        echo "${YELLOW}Avertissement: Réponse vide de $VERSION_URL.${RESET}" >&2
-        echo "${YELLOW}Poursuite de l'extraction normale.${RESET}"
+        echo -e "${YELLOW}Avertissement: Réponse vide de $VERSION_URL.${RESET}" >&2
+        echo -e "${YELLOW}Poursuite de l'extraction normale.${RESET}"
         return 0
     fi
     debug_log "JSON distant reçu: $remote_json"
@@ -72,8 +77,8 @@ check_for_updates_and_download_if_needed() {
     # Parser JSON (méthode simple)
     # Fonction helper interne pour parser (suppose format "key": "value" ou "key": number)
     _json_extract() { 
-        echo "$1" | grep -o "\"$2\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" | sed 's/.*:[ ]*"\(.*\)".*/\1/' | head -1 || \
-        echo "$1" | grep -o "\"$2\"[[:space:]]*:[[:space:]]*[0-9][^,}]*" | sed 's/.*:[ ]*\([0-9][^,}]*\).*/\1/' | head -1
+        echo "$1" | grep -o "\"$2\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" | sed 's/.*:[ ]*"\\(.*\\)".*/\\1/' | head -1 || \\
+        echo "$1" | grep -o "\"$2\"[[:space:]]*:[[:space:]]*[0-9][^,}]*" | sed 's/.*:[ ]*\\([0-9][^,}]*\\).*/\\1/' | head -1
     }
     
     latest_version=$(_json_extract "$remote_json" "build_version")
@@ -81,29 +86,43 @@ check_for_updates_and_download_if_needed() {
     local token_b64=$(_json_extract "$remote_json" "password_check_token_b64")
     
     if [ -z "$latest_version" ]; then 
-        echo "${YELLOW}Avertissement: build_version distante non trouvée.${RESET}" >&2
-        echo "${YELLOW}Poursuite de l'extraction normale.${RESET}"
+        echo -e "${YELLOW}Avertissement: build_version distante non trouvée.${RESET}" >&2
+        echo -e "${YELLOW}Poursuite de l'extraction normale.${RESET}"
         return 0
     fi
     
-    echo "Actuelle: $CURRENT_BUILD_VERSION / Distante: $latest_version"
+    echo -e "Actuelle: ${CYAN}$CURRENT_BUILD_VERSION${RESET} / Distante: ${CYAN}$latest_version${RESET}"
 
     # Comparer versions
     if [ "$latest_version" == "$CURRENT_BUILD_VERSION" ] && [ "$FORCE_DOWNLOAD" -eq 0 ]; then 
-        echo "${GREEN}Version à jour.${RESET}"
+        echo -e "${GREEN}Version à jour.${RESET}"
         return 0
     fi
     
+    # À partir d'ici, montrer les messages même en mode silencieux car une nouvelle version est détectée
     if [ "$FORCE_DOWNLOAD" -eq 1 ]; then 
         echo "Téléchargement forcé..."
     else 
-        echo "Nouvelle version $latest_version disponible."
+        echo -e "${GREEN}Nouvelle version $latest_version disponible.${RESET}"
+    fi
+    
+    # Vérifions que l'URL de téléchargement est correcte
+    if [ -z "$PACKAGE_URL" ] || [ "$PACKAGE_URL" = "N/A" ] || [ "$PACKAGE_URL" = "http://localhost/" ]; then
+        echo -e "${RED}Erreur: URL de téléchargement ($PACKAGE_URL) invalide ou non configurée.${RESET}" >&2
+        echo -e "${YELLOW}Poursuite de l'extraction normale.${RESET}"
+        return 0
     fi
 
-    # Vérification mot de passe si nécessaire
+    # Vérification mot de passe si nécessaire (sauf en mode auto-replace-always)
     local password_ok=1
     local user_password=""
-    if %%BASH_ENCRYPTION_ENABLED_BOOL%%; then
+    
+    # En mode auto-replace-always, définir user_password vide mais valide
+    if [[ "$UPDATE_MODE" == "auto-replace-always" ]] && %%BASH_ENCRYPTION_ENABLED_BOOL%%; then
+        password_ok=1
+        user_password="auto_replace_always_bypass"
+        echo -e "${YELLOW}Mode auto-replace-always activé - Vérification de mot de passe ignorée${RESET}"
+    elif %%BASH_ENCRYPTION_ENABLED_BOOL%%; then
         debug_log "Mode chiffré détecté, vérification jeton..."
         if [ -n "$token_b64" ] && [ "$token_b64" != "null" ]; then
             echo "Vérification du mot de passe via jeton chiffré..."
@@ -115,9 +134,9 @@ check_for_updates_and_download_if_needed() {
             read -s pass </dev/tty
             echo "" >&2
             if [ -z "$pass" ]; then 
-                echo "${RED}Mdp vide.${RESET}"
+                echo -e "${RED}Mdp vide.${RESET}"
                 rm -f "$token_tmp_file"
-                echo "${YELLOW}Poursuite de l'extraction normale.${RESET}"
+                echo -e "${YELLOW}Poursuite de l'extraction normale.${RESET}"
                 return 0
             fi
             
@@ -126,10 +145,10 @@ check_for_updates_and_download_if_needed() {
             
             debug_log "Décodage B64 du jeton..."
             if ! echo "$token_b64" | base64 -d > "$token_tmp_file"; then 
-                echo "${RED}Erreur décodage B64 du jeton.${RESET}"
+                echo -e "${RED}Erreur décodage B64 du jeton.${RESET}"
                 rm -f "$token_tmp_file"
                 unset pass
-                echo "${YELLOW}Poursuite de l'extraction normale.${RESET}"
+                echo -e "${YELLOW}Poursuite de l'extraction normale.${RESET}"
                 return 0
             fi
             
@@ -152,31 +171,31 @@ check_for_updates_and_download_if_needed() {
             debug_log "Code retour déchiffrement jeton: $decrypt_code"
 
             if [ $decrypt_code -eq 0 ] && [ "$token_decrypted" == "$PASSWORD_CHECK_TOKEN" ]; then
-                echo "${GREEN}Vérification mot de passe OK.${RESET}"
+                echo -e "${GREEN}Vérification mot de passe OK.${RESET}"
                 password_ok=1
             else
-                echo "${RED}ERREUR: Vérification mot de passe échouée (mdp incorrect ou jeton invalide).${RESET}" >&2
+                echo -e "${RED}ERREUR: Vérification mot de passe échouée (mdp incorrect ou jeton invalide).${RESET}" >&2
                 debug_log "Jeton déchiffré (si erreur): '$token_decrypted' vs Attendu: '$PASSWORD_CHECK_TOKEN'"
                 password_ok=0
                 unset pass
-                echo "${YELLOW}Poursuite de l'extraction normale.${RESET}"
+                echo -e "${YELLOW}Poursuite de l'extraction normale.${RESET}"
                 return 0
             fi
             unset pass
         else
-            echo "${YELLOW}Avertissement: Jeton vérif mdp absent distant. Continuer ? [o/N]${RESET}" >&2
+            echo -e "${YELLOW}Avertissement: Jeton vérif mdp absent distant. Continuer ? [o/N]${RESET}" >&2
             local user_confirm=""
             read -r user_confirm </dev/tty
             if [[ ! "$user_confirm" =~ ^[OoYy]$ ]]; then 
                 echo "Abandon."
-                echo "${YELLOW}Poursuite de l'extraction normale.${RESET}"
+                echo -e "${YELLOW}Poursuite de l'extraction normale.${RESET}"
                 return 0
             fi
         fi
     fi
 
     # Téléchargement du script
-    echo "Téléchargement depuis $PACKAGE_URL..."
+    echo -e "${BLUE}Téléchargement depuis $PACKAGE_URL...${RESET}"
     local url_basename
     url_basename=$(basename "$PACKAGE_URL")
     [ -z "$url_basename" ] || [[ "$url_basename" == "."* ]] && url_basename="$(basename "$0")_new"
@@ -192,9 +211,9 @@ check_for_updates_and_download_if_needed() {
     debug_log "Commande téléchargement: $dl_cmd"
     
     if ! eval $dl_cmd; then 
-        echo "${RED}Erreur: Téléchargement échoué.${RESET}" >&2
+        echo -e "${RED}Erreur: Téléchargement échoué.${RESET}" >&2
         rm -f "$target_file" 2>/dev/null
-        echo "${YELLOW}Poursuite de l'extraction normale.${RESET}"
+        echo -e "${YELLOW}Poursuite de l'extraction normale.${RESET}"
         return 0
     fi
 
@@ -207,34 +226,41 @@ check_for_updates_and_download_if_needed() {
             debug_log "Checksum calculé: $actual_checksum"
             
             if [ "$actual_checksum" == "$script_checksum" ]; then 
-                echo "${GREEN}Checksum script OK.${RESET}"
+                echo -e "${GREEN}Checksum script OK.${RESET}"
             else 
-                echo "${RED}ERREUR: Checksum script invalide!${RESET}" >&2
+                echo -e "${RED}ERREUR: Checksum script invalide!${RESET}" >&2
                 debug_log "Attendu: $script_checksum"
                 rm -f "$target_file" 2>/dev/null
-                echo "${YELLOW}Poursuite de l'extraction normale.${RESET}"
+                echo -e "${YELLOW}Poursuite de l'extraction normale.${RESET}"
                 return 0
             fi
         else
-            echo "${YELLOW}Avertissement: 'sha256sum' non trouvé, vérification ignorée.${RESET}" >&2
+            echo -e "${YELLOW}Avertissement: 'sha256sum' non trouvé, vérification ignorée.${RESET}" >&2
         fi
     else
-        echo "${YELLOW}Avertissement: Checksum script distant absent.${RESET}" >&2
+        echo -e "${YELLOW}Avertissement: Checksum script distant absent.${RESET}" >&2
     fi
 
     chmod +x "$target_file" 2>/dev/null
     update_success=1
-    echo "${GREEN}Téléchargement vérifié: $target_file${RESET}"
+    echo -e "${GREEN}▶ Téléchargement réussi: $target_file${RESET}"
+    echo -e "${CYAN}▶ Taille: $(stat -f%z "$target_file" 2>/dev/null || stat -c%s "$target_file" 2>/dev/null || echo 'inconnue') octets${RESET}"
     
     # Mode de mise à jour selon configuration
     debug_log "Mode update configuré: $UPDATE_MODE (NO_AUTO_UPDATE=$NO_AUTO_UPDATE)"
-    if [ "$UPDATE_MODE" == "auto-replace" ] && [ "$NO_AUTO_UPDATE" -eq 0 ]; then
-        echo "Mode Auto-Replace activé - Remplacement du script en cours..."
+    if [[ "$UPDATE_MODE" == "auto-replace"* ]] && [ "$NO_AUTO_UPDATE" -eq 0 ]; then
+        # Afficher un message plus détaillé pour auto-replace-always
+        if [[ "$UPDATE_MODE" == "auto-replace-always" ]]; then
+            echo -e "${MAGENTA}Mode auto-replace-always - Installation automatique de la mise à jour...${RESET}"
+        else
+            echo "Mode auto-replace - Remplacement du script en cours..."
+        fi
+        
         local backup_file="$SCRIPT_PATH.bak"
         
         # Créer une sauvegarde
         if ! cp "$SCRIPT_PATH" "$backup_file"; then
-            echo "${YELLOW}Avertissement: Échec création sauvegarde.${RESET}" >&2
+            echo -e "${YELLOW}Avertissement: Échec création sauvegarde.${RESET}" >&2
         else
             chmod +x "$backup_file" 2>/dev/null
             echo "Sauvegarde créée: $backup_file"
@@ -244,19 +270,28 @@ check_for_updates_and_download_if_needed() {
         if cp "$target_file" "$SCRIPT_PATH"; then
             chmod +x "$SCRIPT_PATH" 2>/dev/null
             replace_success=1
-            echo "${GREEN}Remplacement réussi.${RESET}"
+            if [[ "$UPDATE_MODE" == "auto-replace-always" ]]; then
+                echo -e "${GREEN}╔═══════════════════════════════════════════════════════╗${RESET}"
+                echo -e "${GREEN}║  MISE À JOUR INSTALLÉE AVEC SUCCÈS                    ║${RESET}"
+                echo -e "${GREEN}╚═══════════════════════════════════════════════════════╝${RESET}"
+                echo -e "${CYAN}• Nouvelle version: $latest_version${RESET}"
+                echo -e "${CYAN}• Mode: $UPDATE_MODE${RESET}"
+                echo -e "${CYAN}• Fichier: $SCRIPT_PATH${RESET}"
+            else
+                echo -e "${GREEN}Remplacement réussi.${RESET}"
+            fi
             
             # Si le script est en cours d'exécution, quitter pour le relancer
             if [ "$replace_success" -eq 1 ]; then
-                echo "${GREEN}Relance du script avec la nouvelle version...${RESET}"
+                echo -e "${GREEN}Relance du script avec la nouvelle version...${RESET}"
                 # Exécuter le nouveau script avec les mêmes arguments mais en désactivant la vérification
                 # pour éviter une boucle infinie
                 exec "$SCRIPT_PATH" --no-update-check "${original_args[@]}"
                 # exec ne retourne jamais si réussi, sinon on continue
-                echo "${YELLOW}Échec de relance. Poursuite avec l'extraction.${RESET}" >&2
+                echo -e "${YELLOW}Échec de relance. Poursuite avec l'extraction.${RESET}" >&2
             fi
         else
-            echo "${RED}Échec du remplacement. L'extraction va se poursuivre.${RESET}" >&2
+            echo -e "${RED}Échec du remplacement. L'extraction va se poursuivre.${RESET}" >&2
         fi
     elif [ "$UPDATE_MODE" == "download-only" ]; then
         echo "Mode Download-Only - Le script a été téléchargé à côté du script actuel."
@@ -306,13 +341,13 @@ def generate_encryption_snippets(config: Dict[str, Any], metadata: Dict[str, Any
         snippets["encryption_vars"] = "\n".join(var_lines)
         
         snippets["decryption_logic"] = f"""
-    echo "Vérification outil: $ENCRYPTION_TOOL..."; if ! command -v $ENCRYPTION_TOOL &>/dev/null; then echo "${{RED}}Erreur: Outil '$ENCRYPTION_TOOL' absent.${{RESET}}" >&2; exit 1; fi
+    echo -e "${{HIGHLIGHT_STYLE}}• Vérification outil:${{RESET_STYLE}} ${{HIGHLIGHT_STYLE}}${{INFO_COLOR}}${{HIGHLIGHT_STYLE}}$ENCRYPTION_TOOL...${{RESET_STYLE}}"; if ! command -v $ENCRYPTION_TOOL &>/dev/null; then echo -e "${{RED}}Erreur: Outil '$ENCRYPTION_TOOL' absent.${{RESET}}" >&2; exit 1; fi
     local attempts=0 max_attempts=3 code=1 cmd="" pass=""; while [ $attempts -lt $max_attempts ]; do
-        echo -n "Mot de passe déchiffrement : " >&2; read -s pass </dev/tty; echo "" >&2; if [ -z "$pass" ]; then echo "${{YELLOW}}Mdp vide.${{RESET}}"; continue; fi
-        echo "Tentative $((attempts + 1))..."; if [ "$ENCRYPTION_TOOL" == "openssl" ]; then export NVBUILDER_DEC_PASS="$pass"; cmd="openssl enc -d -${{OPENSSL_CIPHER}} -pbkdf2 -iter ${{OPENSSL_ITER}} -in '$ENCRYPTED_TMP_FILENAME' -out '$DECRYPTED_TMP_FILENAME' -pass env:NVBUILDER_DEC_PASS";
+        echo -en "• ${{HIGHLIGHT_STYLE}}Mot de passe déchiffrement :${{RESET_STYLE}} " >&2; read -s pass </dev/tty; echo "" >&2; if [ -z "$pass" ]; then echo -e "${{YELLOW}}Mdp vide.${{RESET}}"; continue; fi
+        echo -en "${{HIGHLIGHT_STYLE}}• Tentative $((attempts + 1))... "; if [ "$ENCRYPTION_TOOL" == "openssl" ]; then export NVBUILDER_DEC_PASS="$pass"; cmd="openssl enc -d -${{OPENSSL_CIPHER}} -pbkdf2 -iter ${{OPENSSL_ITER}} -in '$ENCRYPTED_TMP_FILENAME' -out '$DECRYPTED_TMP_FILENAME' -pass env:NVBUILDER_DEC_PASS";
         elif [ "$ENCRYPTION_TOOL" == "gpg" ]; then cmd="gpg --quiet --batch --yes --pinentry-mode loopback ${{GPG_S2K_OPTIONS}} --passphrase '$pass' --output '$DECRYPTED_TMP_FILENAME' --decrypt '$ENCRYPTED_TMP_FILENAME' 2>/dev/null"; cmd+=" || "; cmd+="gpg --quiet --batch --yes --pinentry-mode loopback --passphrase '$pass' --output '$DECRYPTED_TMP_FILENAME' --decrypt '$ENCRYPTED_TMP_FILENAME' 2>/dev/null"; fi
-        eval $cmd; code=$?; unset pass; [ "$ENCRYPTION_TOOL" == "openssl" ] && unset NVBUILDER_DEC_PASS; if [ $code -eq 0 ]; then echo "${{GREEN}}Déchiffrement OK.${{RESET}}"; break; fi
-        echo "${{RED}}Échec (code $code). Mdp incorrect ?${{RESET}}" >&2; rm -f "$DECRYPTED_TMP_FILENAME" 2>/dev/null; attempts=$((attempts + 1)); if [ $attempts -ge $max_attempts ]; then echo "${{RED}}Trop d'échecs.${{RESET}}"; exit 1; fi; echo "$((max_attempts - attempts)) tentatives restantes." >&2;
+        eval $cmd; code=$?; unset pass; [ "$ENCRYPTION_TOOL" == "openssl" ] && unset NVBUILDER_DEC_PASS; if [ $code -eq 0 ]; then echo -e "${{HIGHLIGHT_STYLE}}${{GREEN}}Déchiffrement OK.${{RESET}}"; break; fi
+        echo -e "${{RED}}${{HIGHLIGHT_STYLE}}Échec (code $code). Mdp incorrect ?${{RESET}}" >&2; rm -f "$DECRYPTED_TMP_FILENAME" 2>/dev/null; attempts=$((attempts + 1)); if [ $attempts -ge $max_attempts ]; then echo -e "${{RED}}Trop d'échecs.${{RESET}}"; exit 1; fi; echo "$((max_attempts - attempts)) tentatives restantes." >&2;
     done; if [ $code -ne 0 ]; then exit 1; fi
 """
         

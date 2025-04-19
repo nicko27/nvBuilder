@@ -5,7 +5,7 @@ VERSION = "1.0" # Version mise à jour
 ARCHIVE_MARKER = "__NVBUILDER_ARCHIVE_BELOW__" # Marqueur unique
 TEMPLATE_FILENAME = "extractor_template.sh"
 DEFAULT_CONFIG_FILENAME = "config.yaml"
-DEFAULT_LOG_FILENAME = "/tmp/nvbuilder.log"
+DEFAULT_LOG_FILENAME = "nvbuilder.log"
 DEFAULT_ENCRYPTION_TOOL = "openssl"
 DEFAULT_OPENSSL_ITER = 10000
 DEFAULT_OPENSSL_CIPHER = "aes-256-cbc"
@@ -16,7 +16,7 @@ DEFAULT_GPG_S2K_OPTIONS = "--s2k-mode 3 --s2k-digest-algo SHA512 --s2k-count 650
 PASSWORD_CHECK_TOKEN = "nvbuilder_passwd_ok_v1" # Chaîne à chiffrer/vérifier
 
 # Modes de mise à jour
-UPDATE_MODES = ["check-only", "download-only", "auto-replace"]
+UPDATE_MODES = ["check-only", "download-only", "auto-replace", "auto-replace-always"]
 DEFAULT_UPDATE_MODE = "check-only"
 
 # Clés de configuration attendues et valeurs par défaut

@@ -10,13 +10,16 @@ from typing import Dict, Any, Optional
 from .utils import check_tool_availability, calculate_checksum
 from .exceptions import EncryptionError, ToolNotFoundError
 from .constants import DEFAULT_ENCRYPTION_TOOL, DEFAULT_OPENSSL_CIPHER, DEFAULT_OPENSSL_ITER, DEFAULT_GPG_CIPHER_ALGO, DEFAULT_GPG_S2K_OPTIONS
-try: 
-    from colorama import Fore, Style; 
-except ImportError: 
-    class DummyColorama: 
-        def __getattr__(self, name): 
-            return ""
-    Fore = Style = DummyColorama(); Style.RESET_ALL = ""
+try:
+    from colorama import Fore, Style, init as colorama_init
+    colorama_init()  # Initialiser ici aussi au cas où __main__ ne serait pas appelé
+except ImportError:
+    # Créer des substituts vides si colorama n'est pas là
+    class DummyColorama:
+        def __getattr__(self, name): return ""
+    Fore = Style = DummyColorama()
+    # Définir RESET_ALL comme chaîne vide pour éviter erreurs
+    Style.RESET_ALL = ""
 
 
 logger = logging.getLogger("nvbuilder")
@@ -66,6 +69,14 @@ class Encryptor:
             EncryptionError: Si le chiffrement échoue
             ToolNotFoundError: Si l'outil de chiffrement est absent
         """
+        BLUE = Fore.BLUE
+        GREEN = Fore.GREEN
+        YELLOW = Fore.YELLOW
+        CYAN = Fore.CYAN
+        MAGENTA = Fore.MAGENTA
+        BRIGHT = Style.BRIGHT
+        DIM = Style.DIM
+        RESET = Style.RESET_ALL   
         # Définir l'extension de chiffrement
         enc_ext = ".enc" if self.tool == "openssl" else ".gpg"
         encrypted_path = archive_path.with_suffix(archive_path.suffix + enc_ext)
@@ -74,7 +85,7 @@ class Encryptor:
         if self.debug_mode:
             logger.info(f"Chiffrement ({self.tool}) vers {encrypted_path.name}...")
         else:
-            print("Chiffrement en cours...", end=" ", flush=True)
+            print(f"{BLUE}{BRIGHT}Chiffrement en cours...      ", end=" ", flush=True)
 
         try:
             # Vérifier la disponibilité de l'outil
@@ -142,7 +153,7 @@ class Encryptor:
                 
                 # Messages de confirmation
                 if self.debug_mode:
-                    logger.info(f"-> Chiffrement {Fore.GREEN}OK{Style.RESET_ALL}. Checksum: {checksum[:12]}...")
+                    logger.info(f"•  Chiffrement {Fore.GREEN}OK{Style.RESET_ALL}. Checksum: {checksum[:12]}...")
                 else:
                     print(f"{Fore.GREEN}OK{Style.RESET_ALL}")
                 

@@ -122,6 +122,14 @@ class ScriptGenerator:
             raise e
 
     def _encode_archive(self, archive_path: Path) -> bytes:
+        BLUE = Fore.BLUE
+        GREEN = Fore.GREEN
+        YELLOW = Fore.YELLOW
+        CYAN = Fore.CYAN
+        MAGENTA = Fore.MAGENTA
+        BRIGHT = Style.BRIGHT
+        DIM = Style.DIM
+        RESET = Style.RESET_ALL          
         """
         Lit l'archive et l'encode en Base64.
         
@@ -137,7 +145,7 @@ class ScriptGenerator:
         if self.debug_mode:
             logger.info(f"Encodage Base64 de '{archive_path.name}'...")
         else:
-            print("Préparation de l'archive...", end=" ", flush=True)
+            print(f"{BLUE}{BRIGHT}Préparation de l'archive...  ", end=" ", flush=True)
         
         try:
             # Lire l'archive en binaire
@@ -150,7 +158,7 @@ class ScriptGenerator:
             size_mb = len(encoded_data)/1024/1024
             
             if self.debug_mode:
-                logger.info(f"-> Encodage Base64 {Fore.GREEN}OK{Style.RESET_ALL} (Taille: {size_mb:.2f} Mo)")
+                logger.info(f"•  Encodage Base64 {Fore.GREEN}OK{Style.RESET_ALL} (Taille: {size_mb:.2f} Mo)")
             else:
                 print(f"{Fore.GREEN}OK{Style.RESET_ALL}")
             
@@ -158,6 +166,8 @@ class ScriptGenerator:
             
         except Exception as e:
             raise BuildProcessError(f"Erreur encodage B64 {archive_path}: {e}") from e
+
+# Ajout dans la méthode _prepare_replacements de la classe ScriptGenerator
 
     def _prepare_replacements(self, archive_original_filename: str, 
                             tar_command_flags: str, bash_snippets: Dict[str, str]) -> Dict[str, str]:
@@ -190,6 +200,9 @@ class ScriptGenerator:
         upd_enabled = self.metadata.get('update_enabled', False)
         upd_mode = self.metadata.get('update_mode', 'check-only')
         url_display = self.config.get('update', {}).get('version_url', '') or 'N/A'
+        
+        # Paramètre pour les droits d'administrateur
+        need_root = self.config.get('output', {}).get('need_root', False)
         
         # Information de mise à jour
         version_url = self.config.get('update', {}).get('version_url', '')
@@ -227,8 +240,9 @@ class ScriptGenerator:
             # Flags pour le script bash
             "%%BASH_ENCRYPTION_ENABLED_BOOL%%": "true" if enc_enabled else "false",
             "%%BASH_UPDATE_ENABLED_BOOL%%": "true" if upd_enabled else "false",
+            "%%NEED_ROOT_BOOL%%": "true" if need_root else "false",
             
-            # Snippets bash - nous supprimons "%%BASH_UPDATE_VARS%%" car nous l'intégrons directement
+            # Snippets bash
             "%%BASH_ENCRYPTION_VARS%%": bash_snippets.get("encryption_vars", ""),
             "%%BASH_DECRYPTION_LOGIC%%": bash_snippets.get("decryption_logic", ""),
             "%%BASH_DECRYPTION_CLEANUP%%": bash_snippets.get("decryption_cleanup", "")
@@ -280,10 +294,18 @@ class ScriptGenerator:
         Raises:
             BuildProcessError: Si l'écriture échoue
         """
+        BLUE = Fore.BLUE
+        GREEN = Fore.GREEN
+        YELLOW = Fore.YELLOW
+        CYAN = Fore.CYAN
+        MAGENTA = Fore.MAGENTA
+        BRIGHT = Style.BRIGHT
+        DIM = Style.DIM
+        RESET = Style.RESET_ALL  
         if self.debug_mode:
             logger.info(f"Écriture script -> {output_path}")
         else:
-            print("Génération du script final...", end=" ", flush=True)
+            print(f"{BRIGHT}{BLUE}Génération du script final...", end=" ", flush=True)
         
         try:
             # Créer les répertoires parents si nécessaire
@@ -314,7 +336,7 @@ class ScriptGenerator:
             os.chmod(output_path, 0o755)
             
             if self.debug_mode:
-                logger.info(f"-> Écriture script {Fore.GREEN}OK{Style.RESET_ALL}")
+                logger.info(f"•  Écriture script {Fore.GREEN}OK{Style.RESET_ALL}")
             else:
                 print(f"{Fore.GREEN}OK{Style.RESET_ALL}")
             

@@ -14,6 +14,15 @@ from .builder import NvBuilder
 from .constants import VERSION, DEFAULT_CONFIG_FILENAME
 from .exceptions import NvBuilderError
 from .utils import get_standard_exclusions
+
+# Import des couleurs sémantiques
+from .colors import (
+    ERROR_COLOR, SUCCESS_COLOR, WARNING_COLOR, INFO_COLOR, DETAIL_COLOR,
+    UPDATE_COLOR, DEBUG_COLOR, HEADER_COLOR, BANNER_COLOR, FILENAME_COLOR,
+    PATH_COLOR, OPTION_COLOR, KEY_COLOR, VALUE_COLOR, 
+    HIGHLIGHT_STYLE, SUBTLE_STYLE, RESET_STYLE
+)
+
 # Dépendances optionnelles
 try: 
     import yaml; 
@@ -31,69 +40,54 @@ try:
 except ImportError: 
     HAS_REQUESTS = False
 
-# Initialisation Colorama
-if HAS_COLORAMA:
-    colorama.init(autoreset=True)
-    RED = colorama.Fore.RED
-    GREEN = colorama.Fore.GREEN
-    YELLOW = colorama.Fore.YELLOW
-    BLUE = colorama.Fore.BLUE
-    CYAN = colorama.Fore.CYAN
-    MAGENTA = colorama.Fore.MAGENTA
-    BRIGHT = colorama.Style.BRIGHT
-    DIM = colorama.Style.DIM
-    RESET = colorama.Style.RESET_ALL
-else:
-    RED = GREEN = YELLOW = BLUE = CYAN = MAGENTA = BRIGHT = DIM = RESET = ""
-
 def display_banner():
     """Affiche une bannière ASCII colorée."""
-    print(f"{CYAN}{BRIGHT}╔═══════════════════════════════════════════════════════════╗{RESET}")
-    print(f"{CYAN}{BRIGHT}║                {BLUE}NVBUILDER v{VERSION}{CYAN}                             ║{RESET}")
-    print(f"{CYAN}{BRIGHT}╚═══════════════════════════════════════════════════════════╝{RESET}")
+    print(f"{BANNER_COLOR}{HIGHLIGHT_STYLE}╔═══════════════════════════════════════════════════════════╗{RESET_STYLE}")
+    print(f"{BANNER_COLOR}{HIGHLIGHT_STYLE}║                {INFO_COLOR}NVBUILDER v{VERSION}{BANNER_COLOR}                             ║{RESET_STYLE}")
+    print(f"{BANNER_COLOR}{HIGHLIGHT_STYLE}╚═══════════════════════════════════════════════════════════╝{RESET_STYLE}")
     print()
 
 def check_python_version():
     """Vérifie la version Python."""
     if not sys.version_info >= (3, 7):
-        print(f"{RED}Erreur: Python 3.7+ requis (v{platform.python_version()} détectée).{RESET}", file=sys.stderr)
+        print(f"{ERROR_COLOR}Erreur: Python 3.7+ requis (v{platform.python_version()} détectée).{RESET_STYLE}", file=sys.stderr)
         sys.exit(1)
 
 def check_python_dependencies(debug=False):
     """Vérifie les dépendances Python essentielles."""
     if debug:
-        print(f"{BRIGHT}Vérification des dépendances Python...{RESET}")
+        print(f"{HIGHLIGHT_STYLE}Vérification des dépendances Python...{RESET_STYLE}")
     
     missing = []
     if not HAS_YAML: missing.append("PyYAML")
     if not HAS_COLORAMA: missing.append("colorama")
     
     if missing:
-        print(f"{RED}Erreur: Modules manquants: {', '.join(missing)}{RESET}", file=sys.stderr)
-        print(f"-> Installation via pip: {YELLOW}pip install {' '.join(missing)}{RESET}", file=sys.stderr)
+        print(f"{ERROR_COLOR}Erreur: Modules manquants: {', '.join(missing)}{RESET_STYLE}", file=sys.stderr)
+        print(f"•  Installation via pip: {WARNING_COLOR}pip install {' '.join(missing)}{RESET_STYLE}", file=sys.stderr)
         try: 
             req_file = Path(__file__).parent.parent/'requirements.txt'
             if req_file.is_file(): 
-                print(f"   Ou via: {YELLOW}pip install -r {req_file}{RESET}", file=sys.stderr)
+                print(f"   Ou via: {WARNING_COLOR}pip install -r {req_file}{RESET_STYLE}", file=sys.stderr)
         except: pass
         sys.exit(1)
     
     if debug:
-        print(f"{GREEN}✓ Dépendances essentielles OK.{RESET}")
+        print(f"{SUCCESS_COLOR}✓ Dépendances essentielles OK.{RESET_STYLE}")
 
 def list_standard_exclusions(): 
     """Liste les exclusions standard."""
-    print(f"{GREEN}{BRIGHT}--- Exclusions Standard ---{RESET}")
+    print(f"{SUCCESS_COLOR}{HIGHLIGHT_STYLE}--- Exclusions Standard ---{RESET_STYLE}")
     total = 0
     exclusions = get_standard_exclusions()
     
     for category, patterns in exclusions.items(): 
-        print(f"\n{YELLOW}{BRIGHT}{category}{RESET}:") 
+        print(f"\n{WARNING_COLOR}{HIGHLIGHT_STYLE}{category}{RESET_STYLE}:") 
         for p in patterns:
-            print(f"  • {CYAN}{p}{RESET}") 
+            print(f"  • {FILENAME_COLOR}{p}{RESET_STYLE}") 
         total += len(patterns)
     
-    print(f"\n{GREEN}Total: {BRIGHT}{total}{RESET} motifs.")
+    print(f"\n{SUCCESS_COLOR}Total: {HIGHLIGHT_STYLE}{total}{RESET_STYLE} motifs.")
 
 def run_interactive_config(config_path_arg: str, debug=False): 
     """Lance la configuration interactive."""
@@ -101,13 +95,13 @@ def run_interactive_config(config_path_arg: str, debug=False):
         from .config import ConfigLoader
         ConfigLoader.interactive_create(config_path_arg, debug)
     except NotImplementedError: 
-        print(f"{RED}Mode interactif non implémenté.{RESET}", file=sys.stderr)
+        print(f"{ERROR_COLOR}Mode interactif non implémenté.{RESET_STYLE}", file=sys.stderr)
         sys.exit(1)
     except KeyboardInterrupt: 
         print("\nConfiguration interactive annulée.")
         sys.exit(0)
     except Exception as e: 
-        print(f"{RED}Erreur config interactive: {e}{RESET}", file=sys.stderr)
+        print(f"{ERROR_COLOR}Erreur config interactive: {e}{RESET_STYLE}", file=sys.stderr)
         traceback.print_exc() if debug else None
         sys.exit(1)
 
@@ -120,7 +114,7 @@ def show_progress_spinner(message="Traitement en cours", duration=3):
     
     while time.time() < end_time:
         i = (i + 1) % len(spinner)
-        print(f"\r{BLUE}{spinner[i]} {message}...{RESET}", end="")
+        print(f"\r{INFO_COLOR}{spinner[i]} {message}...{RESET_STYLE}", end="")
         time.sleep(0.1)
     
     print("\r" + " " * (len(message) + 15) + "\r", end="")
@@ -152,7 +146,7 @@ def main():
         sys.exit(0)
 
     if args.interactive: 
-        print(f"{YELLOW}Lancement mode interactif...{RESET}")
+        print(f"{WARNING_COLOR}Lancement mode interactif...{RESET_STYLE}")
         run_interactive_config(args.config, args.debug)
         sys.exit(0)
 
@@ -160,13 +154,13 @@ def main():
     exit_code = 1 # Défaut = échec
     try:
         if args.debug:
-            print(f"{CYAN}• Mode debug activé")
+            print(f"{DETAIL_COLOR}• Mode debug activé")
             if args.exclude_standard:
-                print(f"{CYAN}• Exclusions standard activées")
-            print(f"{CYAN}• Fichier de config: {args.config}")
+                print(f"{DETAIL_COLOR}• Exclusions standard activées")
+            print(f"{DETAIL_COLOR}• Fichier de config: {args.config}")
         else:
             if args.exclude_standard:
-                print(f"{DIM}Exclusions standard activées{RESET}")
+                print(f"{SUBTLE_STYLE}Exclusions standard activées{RESET_STYLE}")
 
         # Passer le mode debug au NvBuilder
         builder = NvBuilder(
@@ -179,34 +173,33 @@ def main():
         if output_script_path:
             # Message de succès avec barre horizontale
             final_size_mb = output_script_path.stat().st_size / (1024 * 1024)
-            print(f"\n{CYAN}{'═' * 55}{RESET}")
-            print(f"{GREEN}{BRIGHT}  ✅ Build terminé avec succès !{RESET}")
-            print(f"{CYAN}{'═' * 55}{RESET}")
-            print(f"{BLUE}• Script généré : {BRIGHT}{output_script_path}{RESET} ({final_size_mb:.2f} Mo)")
+            print("\n")
+            print(f"{SUCCESS_COLOR}{HIGHLIGHT_STYLE}✅ Build terminé avec succès !{RESET_STYLE}")
+            print(f"   • {HIGHLIGHT_STYLE}Script généré : {INFO_COLOR}{output_script_path}{RESET_STYLE} ({final_size_mb:.2f} Mo)")
             
             if builder.metadata_manager.get('encryption_enabled'):
-                print(f"{BLUE}• Chiffrement  : {GREEN}Activé{RESET} ({builder.metadata_manager.get('encryption_tool', 'openssl')})")
+                print(f"   • {HIGHLIGHT_STYLE}Chiffrement  :  {SUCCESS_COLOR}Activé{RESET_STYLE} ({builder.metadata_manager.get('encryption_tool', 'openssl')})")
             
             if builder.metadata_manager.get('update_enabled'):
                 update_mode = builder.metadata_manager.get('update_mode', 'check-only')
-                print(f"{BLUE}• Mise à jour  : {GREEN}Activée{RESET} (Mode: {update_mode})")
+                print(f"   • {HIGHLIGHT_STYLE}Mise à jour  :  {SUCCESS_COLOR}Activée{RESET_STYLE} (Mode: {update_mode})")
             
             exit_code = 0 # Succès
         else:
             # Message minimal d'échec
-            print(f"\n{RED}>>> Échec du Build.{RESET}")
+            print(f"\n{ERROR_COLOR}>>> Échec du Build.{RESET_STYLE}")
             exit_code = 1 # Échec
 
     except NvBuilderError as e: 
-        print(f"\n{RED}ERREUR: {e}{RESET}", file=sys.stderr)
+        print(f"\n{ERROR_COLOR}ERREUR: {e}{RESET_STYLE}", file=sys.stderr)
         exit_code = 1
     except Exception as e: 
-        print(f"\n{RED}ERREUR INATTENDUE: {e}{RESET}", file=sys.stderr)
+        print(f"\n{ERROR_COLOR}ERREUR INATTENDUE: {e}{RESET_STYLE}", file=sys.stderr)
         # Traceback complet seulement en mode debug
         traceback.print_exc() if args.debug else None
         exit_code = 1
     except KeyboardInterrupt:
-        print(f"\n{YELLOW}Opération annulée.{RESET}")
+        print(f"\n{WARNING_COLOR}Opération annulée.{RESET_STYLE}")
         exit_code = 130
     finally:
         sys.exit(exit_code)

@@ -13,20 +13,14 @@ from .exceptions import ConfigError
 from .utils import (get_absolute_path, get_all_standard_exclusions,
                     _get_nested, _set_nested, prompt_string, prompt_bool,
                     save_config_yaml)
-try:
-    from colorama import Fore, Style, init as colorama_init
-    colorama_init()
-    # Nouvelles couleurs ajoutées
-    BLUE = Fore.BLUE
-    CYAN = Fore.CYAN
-    MAGENTA = Fore.MAGENTA
-    BRIGHT = Style.BRIGHT
-    DIM = Style.DIM
-except ImportError:
-    class DummyColorama:
-        def __getattr__(self, name): return ""
-    Fore = Style = DummyColorama(); Style.RESET_ALL = ""
-    BLUE = CYAN = MAGENTA = BRIGHT = DIM = ""
+
+# Import des couleurs sémantiques
+from .colors import (
+    ERROR_COLOR, SUCCESS_COLOR, WARNING_COLOR, INFO_COLOR, DETAIL_COLOR,
+    UPDATE_COLOR, DEBUG_COLOR, HEADER_COLOR, BANNER_COLOR, FILENAME_COLOR,
+    PATH_COLOR, OPTION_COLOR, KEY_COLOR, VALUE_COLOR, 
+    HIGHLIGHT_STYLE, SUBTLE_STYLE, RESET_STYLE
+)
 
 logger = logging.getLogger("nvbuilder")
 
@@ -158,7 +152,7 @@ class ConfigLoader:
         # Gestion des messages selon le mode debug
         if added > 0:
             if self.debug_mode:
-                logger.info(f"{Fore.CYAN}{added} exclusion(s) standard ajoutée(s).{Style.RESET_ALL}")
+                logger.info(f"{DETAIL_COLOR}{added} exclusion(s) standard ajoutée(s).{RESET_STYLE}")
                 logger.debug(f"Ajoutées: {', '.join(newly_added)}")
             excl_conf['patterns'] = sorted(patterns)
         else:
@@ -170,30 +164,30 @@ class ConfigLoader:
         """Mode de création interactive de configuration."""
         try:
             # Afficher une belle bannière ASCII
-            print(f"\n{CYAN}{BRIGHT}╔══════════════════════════════════════════════════════════╗{Style.RESET_ALL}")
-            print(f"{CYAN}{BRIGHT}║            {Fore.GREEN}NV{BLUE}BUILDER{CYAN} CONFIGURATION v{VERSION}             ║{Style.RESET_ALL}")
-            print(f"{CYAN}{BRIGHT}╚══════════════════════════════════════════════════════════╝{Style.RESET_ALL}")
-            print(f"{BLUE}         Assistant de configuration interactif{Style.RESET_ALL}\n")
+            print(f"\n{BANNER_COLOR}{HIGHLIGHT_STYLE}╔══════════════════════════════════════════════════════════╗{RESET_STYLE}")
+            print(f"{BANNER_COLOR}{HIGHLIGHT_STYLE}║            {SUCCESS_COLOR}NV{INFO_COLOR}BUILDER{BANNER_COLOR} CONFIGURATION v{VERSION}             ║{RESET_STYLE}")
+            print(f"{BANNER_COLOR}{HIGHLIGHT_STYLE}╚══════════════════════════════════════════════════════════╝{RESET_STYLE}")
+            print(f"{INFO_COLOR}         Assistant de configuration interactif{RESET_STYLE}\n")
             
             # Définir des fonctions d'affichage améliorées
             def section_title(title):
-                print(f"\n{CYAN}{BRIGHT}{'━' * 5} {title} {'━' * (45 - len(title))}{Style.RESET_ALL}")
+                print(f"\n{HEADER_COLOR}{HIGHLIGHT_STYLE}{'━' * 5} {title} {'━' * (45 - len(title))}{RESET_STYLE}")
             
             def option_value(option, value, important=False):
-                value_color = BRIGHT if important else ""
-                print(f"  {BLUE}•{Style.RESET_ALL} {option}: {value_color}{value}{Style.RESET_ALL}")
+                value_color = HIGHLIGHT_STYLE if important else ""
+                print(f"  {INFO_COLOR}•{RESET_STYLE} {option}: {value_color}{value}{RESET_STYLE}")
             
             default_path = DEFAULT_CONFIG_FILENAME
-            config_path_str = input(f"{BLUE}Chemin config{Style.RESET_ALL} (défaut: '{default_path}') : ") or default_path
+            config_path_str = input(f"{INFO_COLOR}Chemin config{RESET_STYLE} (défaut: '{default_path}') : ") or default_path
             config_path = get_absolute_path(config_path_str, Path.cwd())
             config: Dict[str, Any] = {}
             
             if config_path.is_file():
                 try:
-                    print(f"\n{Fore.GREEN}Chargement config: {config_path}{Style.RESET_ALL}")
+                    print(f"\n{SUCCESS_COLOR}Chargement config: {config_path}{RESET_STYLE}")
                     # Effet de chargement
                     for i in range(5):
-                        print(f"\r{DIM}Lecture... {'▓' * i}{'░' * (4-i)}{Style.RESET_ALL}", end="")
+                        print(f"\r{SUBTLE_STYLE}Lecture... {'▓' * i}{'░' * (4-i)}{RESET_STYLE}", end="")
                         time.sleep(0.1)
                     print("\r" + " " * 20 + "\r", end="")
                     
@@ -201,9 +195,9 @@ class ConfigLoader:
                     loaded_yaml = yaml.safe_load(f)
                     f.close()
                     config = loaded_yaml if isinstance(loaded_yaml, dict) else {}
-                    print(f"{Fore.YELLOW}(Entrée vide = conserver actuel/défaut){Style.RESET_ALL}")
+                    print(f"{WARNING_COLOR}(Entrée vide = conserver actuel/défaut){RESET_STYLE}")
                 except Exception as e:
-                    print(f"{Fore.RED}Erreur lecture {config_path}: {e}. Nouvelle config.{Style.RESET_ALL}")
+                    print(f"{ERROR_COLOR}Erreur lecture {config_path}: {e}. Nouvelle config.{RESET_STYLE}")
                     config = {}
             else:
                 print(f"\nCréation config: {config_path}")
@@ -215,19 +209,19 @@ class ConfigLoader:
             prompt_string(config, "Source contenu", ['content'], defaults_ref['content'])
             prompt_string(config, "Script post-exec", ['script'], defaults_ref['script'])
             prompt_string(config, "Fichier sortie", ['output', 'path'], defaults_ref['output']['path'])
-            prompt_bool(config, "Root requis (info)", ['output', 'need_root'], defaults_ref['output']['need_root'])
+            prompt_bool(config, "Exécution en root requise", ['output', 'need_root'], defaults_ref['output']['need_root'])
             
             section_title("Compression")
             allowed_methods = ['gz', 'bz2', 'xz', 'none']
             comp_method = _get_nested(config, ['compression', 'method'], defaults_ref['compression']['method'])
             
             # Afficher les options de compression de manière plus visuelle
-            print(f"{BLUE}Méthode de compression:{Style.RESET_ALL}")
+            print(f"{INFO_COLOR}Méthode de compression:{RESET_STYLE}")
             for i, method in enumerate(allowed_methods):
                 if method == comp_method:
-                    print(f"  {CYAN}{BRIGHT}[{i+1}] {method}{Style.RESET_ALL} {CYAN}(actuel){Style.RESET_ALL}")
+                    print(f"  {DETAIL_COLOR}{HIGHLIGHT_STYLE}[{i+1}] {method}{RESET_STYLE} {DETAIL_COLOR}(actuel){RESET_STYLE}")
                 else:
-                    print(f"  {CYAN}[{i+1}] {method}{Style.RESET_ALL}")
+                    print(f"  {DETAIL_COLOR}[{i+1}] {method}{RESET_STYLE}")
                 
             while True:
                 method_input = input(f"Méthode (1-{len(allowed_methods)}) : ").strip()
@@ -239,14 +233,14 @@ class ConfigLoader:
                         comp_method = allowed_methods[idx]
                         break
                     else:
-                        print(f"{Fore.RED}Option invalide.{Style.RESET_ALL}")
+                        print(f"{ERROR_COLOR}Option invalide.{RESET_STYLE}")
                 except ValueError:
                     # Essayer aussi avec la saisie directe de la méthode
                     if method_input in allowed_methods:
                         comp_method = method_input
                         break
                     else:
-                        print(f"{Fore.RED}Méthode invalide.{Style.RESET_ALL}")
+                        print(f"{ERROR_COLOR}Méthode invalide.{RESET_STYLE}")
                     
             _set_nested(config, ['compression', 'method'], comp_method)
             
@@ -256,11 +250,11 @@ class ConfigLoader:
                 cur_lvl = _get_nested(config, ['compression', 'level'], defaults_ref['compression']['level'])
                 
                 # Visualiser les niveaux de compression
-                print(f"{BLUE}Niveau de compression:{Style.RESET_ALL}")
-                print(f"  {DIM}Min{Style.RESET_ALL} [1]{'•' * cur_lvl}[{cur_lvl}]{(8-cur_lvl) * '·'}[9] {DIM}Max{Style.RESET_ALL}")
+                print(f"{INFO_COLOR}Niveau de compression:{RESET_STYLE}")
+                print(f"  {SUBTLE_STYLE}Min{RESET_STYLE} [1]{'•' * cur_lvl}[{cur_lvl}]{(8-cur_lvl) * '·'}[9] {SUBTLE_STYLE}Max{RESET_STYLE}")
                 
                 while not valid:
-                    level_input = input(f"Niveau (1-9) (actuel: {BRIGHT}{cur_lvl}{Style.RESET_ALL}) : ").strip()
+                    level_input = input(f"Niveau (1-9) (actuel: {HIGHLIGHT_STYLE}{cur_lvl}{RESET_STYLE}) : ").strip()
                     if not level_input:
                         level_str = str(cur_lvl)
                         valid = True
@@ -271,7 +265,7 @@ class ConfigLoader:
                             level_str = level_input
                             valid = True
                         except:
-                            print(f"{Fore.RED}Niveau invalide (1-9).{Style.RESET_ALL}")
+                            print(f"{ERROR_COLOR}Niveau invalide (1-9).{RESET_STYLE}")
                             
                 _set_nested(config, ['compression', 'level'], int(level_str))
             else:
@@ -285,11 +279,11 @@ class ConfigLoader:
                 cur_tool = _get_nested(config, ['compression', 'encryption_tool'], defaults_ref['compression']['encryption_tool'])
                 
                 # Présentation des outils de chiffrement
-                print(f"{BLUE}Outil de chiffrement:{Style.RESET_ALL}")
+                print(f"{INFO_COLOR}Outil de chiffrement:{RESET_STYLE}")
                 for tool in allowed_tools:
                     is_current = tool == cur_tool
-                    status = f"{CYAN}(actuel){Style.RESET_ALL}" if is_current else ""
-                    print(f"  {BRIGHT if is_current else ''}{tool}{Style.RESET_ALL} {status}")
+                    status = f"{DETAIL_COLOR}(actuel){RESET_STYLE}" if is_current else ""
+                    print(f"  {HIGHLIGHT_STYLE if is_current else ''}{tool}{RESET_STYLE} {status}")
                 
                 while enc_tool not in allowed_tools:
                     tool_input = input(f"Outil ({'/'.join(allowed_tools)}) : ").lower().strip()
@@ -300,10 +294,10 @@ class ConfigLoader:
                         enc_tool = tool_input
                         break
                     else:
-                        print(f"{Fore.RED}Outil invalide.{Style.RESET_ALL}")
+                        print(f"{ERROR_COLOR}Outil invalide.{RESET_STYLE}")
                         
                 _set_nested(config, ['compression', 'encryption_tool'], enc_tool)
-                print(f"{Fore.YELLOW}Outil '{enc_tool}' requis sur cible.{Style.RESET_ALL}")
+                print(f"{WARNING_COLOR}Outil '{enc_tool}' requis sur cible.{RESET_STYLE}")
             else:
                 _set_nested(config, ['compression', 'encryption_tool'], defaults_ref['compression']['encryption_tool'])
                 
@@ -345,7 +339,7 @@ class ConfigLoader:
                             processed_keys.add(key)
                             
                     if added > 0:
-                        print(f"{Fore.CYAN}{added} std ajoutée(s).{Style.RESET_ALL}")
+                        print(f"{DETAIL_COLOR}{added} std ajoutée(s).{RESET_STYLE}")
                 else:
                     for p in current_patterns:
                         key = p.lower() if ignore_case else p
@@ -357,19 +351,19 @@ class ConfigLoader:
                             removed += 1
                             
                     if removed > 0:
-                        print(f"{Fore.CYAN}{removed} std retirée(s).{Style.RESET_ALL}")
+                        print(f"{DETAIL_COLOR}{removed} std retirée(s).{RESET_STYLE}")
                         
                 current_patterns = temp_list
                 custom_current = [p for p in current_patterns if p.lower() not in std_lower]
-                print(f"\n{BLUE}Exclusions personnalisées actuelles:{Style.RESET_ALL}")
+                print(f"\n{INFO_COLOR}Exclusions personnalisées actuelles:{RESET_STYLE}")
                 if custom_current:
                     for p in sorted(custom_current):
-                        print(f"  {CYAN}• {p}{Style.RESET_ALL}")
+                        print(f"  {DETAIL_COLOR}• {p}{RESET_STYLE}")
                 else:
-                    print(f"  {DIM}(aucune){Style.RESET_ALL}")
+                    print(f"  {SUBTLE_STYLE}(aucune){RESET_STYLE}")
                     
                 if prompt_bool(config, "Ajouter/modif perso?", ['__dummy_cust'], True):
-                    print(f"{BLUE}Motifs perso (vide=fin):{Style.RESET_ALL}")
+                    print(f"{INFO_COLOR}Motifs perso (vide=fin):{RESET_STYLE}")
                     final_custom = list(custom_current)
                     custom_keys = set(p.lower() if ignore_case else p for p in final_custom)
                     
@@ -381,9 +375,9 @@ class ConfigLoader:
                         if key not in custom_keys:
                             final_custom.append(pat)
                             custom_keys.add(key)
-                            print(f" {Fore.GREEN}✓{Style.RESET_ALL} Ajouté: '{pat}'")
+                            print(f" {SUCCESS_COLOR}✓{RESET_STYLE} Ajouté: '{pat}'")
                         else:
-                            print(f"{Fore.YELLOW} ⚠ Existe déjà.{Style.RESET_ALL}")
+                            print(f"{WARNING_COLOR} ⚠ Existe déjà.{RESET_STYLE}")
                             
                     all_final = []
                     final_seen = set()
@@ -418,7 +412,7 @@ class ConfigLoader:
             update_default = _get_nested(config, ['update', 'enabled'], defaults_ref['update']['enabled'])
             
             if is_encrypted_final:
-                print(f"{Fore.YELLOW}Chiffrement activé -> MàJ Check-Only recommandée.{Style.RESET_ALL}")
+                print(f"{WARNING_COLOR}Chiffrement activé -> MàJ Check-Only recommandée.{RESET_STYLE}")
                 update_is_enabled = prompt_bool(config, "Activer MàJ?", ['update', 'enabled'], update_default)
             else:
                 update_is_enabled = prompt_bool(config, "Activer MàJ?", ['update', 'enabled'], update_default)
@@ -434,15 +428,16 @@ class ConfigLoader:
                 mode_descriptions = {
                     "check-only": "Vérifier uniquement",
                     "download-only": "Télécharger sans installer",
-                    "auto-replace": "Remplacer et relancer auto"
+                    "auto-replace": "Remplacer et relancer auto",
+                    "auto-replace-always": "Remplacer sans vérif mot de passe"
                 }
                 
-                print(f"\n{BLUE}Mode de mise à jour:{Style.RESET_ALL}")
+                print(f"\n{INFO_COLOR}Mode de mise à jour:{RESET_STYLE}")
                 for i, mode in enumerate(modes_allowed):
                     desc = mode_descriptions.get(mode, mode)
                     is_current = mode == current_mode
-                    status = f"{CYAN}(actuel){Style.RESET_ALL}" if is_current else ""
-                    print(f"  {BRIGHT if is_current else ''}{i+1}. {desc} ({mode}){Style.RESET_ALL} {status}")
+                    status = f"{DETAIL_COLOR}(actuel){RESET_STYLE}" if is_current else ""
+                    print(f"  {HIGHLIGHT_STYLE if is_current else ''}{i+1}. {desc} ({mode}){RESET_STYLE} {status}")
                 
                 while True:
                     mode_input = input(f"Mode (1-{len(modes_allowed)}) : ").strip()
@@ -455,17 +450,21 @@ class ConfigLoader:
                             _set_nested(config, ['update', 'mode'], current_mode)
                             break
                         else:
-                            print(f"{Fore.RED}Choix invalide. Entrez un nombre entre 1 et {len(modes_allowed)}.{Style.RESET_ALL}")
+                            print(f"{ERROR_COLOR}Choix invalide. Entrez un nombre entre 1 et {len(modes_allowed)}.{RESET_STYLE}")
                     except ValueError:
-                        print(f"{Fore.RED}Veuillez entrer un nombre.{Style.RESET_ALL}")
+                        print(f"{ERROR_COLOR}Veuillez entrer un nombre.{RESET_STYLE}")
                 
-                print(f"{Fore.YELLOW}Nécessite curl/wget cible.{Style.RESET_ALL}")
-                
-                # Avertissement pour auto-replace
-                if current_mode == "auto-replace":
-                    print(f"{Fore.YELLOW}ATTENTION: Le mode 'auto-replace' remplacera automatiquement\nle script et le relancera lors des mises à jour.{Style.RESET_ALL}")
-                    if is_encrypted_final:
-                        print(f"{Fore.RED}NB: Le chiffrement est activé - le mode auto-replace nécessitera\nquand même une saisie manuelle du mot de passe.{Style.RESET_ALL}")
+                print(f"{WARNING_COLOR}Nécessite curl/wget cible.{RESET_STYLE}")
+
+            # Avertissement pour auto-replace
+            if current_mode == "auto-replace":
+                print(f"{WARNING_COLOR}ATTENTION: Le mode 'auto-replace' remplacera automatiquement\nle script et le relancera lors des mises à jour.{RESET_STYLE}")
+                if is_encrypted_final:
+                    print(f"{ERROR_COLOR}NB: Le chiffrement est activé - le mode auto-replace nécessitera\nquand même une saisie manuelle du mot de passe.{RESET_STYLE}")
+            elif current_mode == "auto-replace-always":
+                print(f"{ERROR_COLOR}ATTENTION: Le mode 'auto-replace-always' remplacera automatiquement\nle script sans demander de mot de passe pour les mises à jour.{RESET_STYLE}")
+                if is_encrypted_final:
+                    print(f"{ERROR_COLOR}NB: Le chiffrement est activé mais en mode auto-replace-always,\naucune vérification de mot de passe ne sera effectuée pour les mises à jour.{RESET_STYLE}")
             else:
                 [_set_nested(config, ['update', k], '') for k in ['version_url', 'package_url', 'version_file_path']]
                 _set_nested(config, ['update', 'enabled'], False)
@@ -483,7 +482,7 @@ class ConfigLoader:
             post = config['hooks']['post_build']
             
             if prompt_bool(config, "Configurer hooks?", ['__dummy_h'], bool(pre or post)):
-                print(f"{BLUE}Commandes Pré-build (vide=fin):{Style.RESET_ALL}")
+                print(f"{INFO_COLOR}Commandes Pré-build (vide=fin):{RESET_STYLE}")
                 new_pre = []
                 
                 while True:
@@ -491,11 +490,11 @@ class ConfigLoader:
                     if not cmd:
                         break
                     new_pre.append(cmd)
-                    print(f" {Fore.GREEN}✓{Style.RESET_ALL} Ajouté: '{cmd}'")
+                    print(f" {SUCCESS_COLOR}✓{RESET_STYLE} Ajouté: '{cmd}'")
                     
                 config['hooks']['pre_build'] = new_pre
                 
-                print(f"\n{BLUE}Commandes Post-build (vide=fin):{Style.RESET_ALL}")
+                print(f"\n{INFO_COLOR}Commandes Post-build (vide=fin):{RESET_STYLE}")
                 new_post = []
                 
                 while True:
@@ -503,7 +502,7 @@ class ConfigLoader:
                     if not cmd:
                         break
                     new_post.append(cmd)
-                    print(f" {Fore.GREEN}✓{Style.RESET_ALL} Ajouté: '{cmd}'")
+                    print(f" {SUCCESS_COLOR}✓{RESET_STYLE} Ajouté: '{cmd}'")
                     
                 config['hooks']['post_build'] = new_post
             else:
@@ -515,20 +514,20 @@ class ConfigLoader:
             
             section_title("Sauvegarde")
             # Animation de sauvegarde
-            print(f"{BLUE}Écriture du fichier de configuration...{Style.RESET_ALL}")
+            print(f"{INFO_COLOR}Écriture du fichier de configuration...{RESET_STYLE}")
             for i in range(10):
                 progress = (i + 1) * 10
                 bar = "▓" * (i + 1) + "░" * (9 - i)
-                print(f"\r{CYAN}[{bar}] {progress}%{Style.RESET_ALL}", end="")
+                print(f"\r{DETAIL_COLOR}[{bar}] {progress}%{RESET_STYLE}", end="")
                 time.sleep(0.05)
             print("\r" + " " * 30 + "\r", end="")
             
             save_config_yaml(config, config_path)
             
             # Résumé des paramètres de configuration
-            print(f"\n{CYAN}{BRIGHT}╔══════════════════════════════════════════════════════════╗{Style.RESET_ALL}")
-            print(f"{CYAN}{BRIGHT}║                RÉSUMÉ DE CONFIGURATION                  ║{Style.RESET_ALL}")
-            print(f"{CYAN}{BRIGHT}╚══════════════════════════════════════════════════════════╝{Style.RESET_ALL}")
+            print(f"\n{BANNER_COLOR}{HIGHLIGHT_STYLE}╔══════════════════════════════════════════════════════════╗{RESET_STYLE}")
+            print(f"{BANNER_COLOR}{HIGHLIGHT_STYLE}║                RÉSUMÉ DE LA CONFIGURATION                ║{RESET_STYLE}")
+            print(f"{BANNER_COLOR}{HIGHLIGHT_STYLE}╚══════════════════════════════════════════════════════════╝{RESET_STYLE}")
             
             option_value("Fichier source", _get_nested(config, ['content']))
             option_value("Script post-extraction", _get_nested(config, ['script']))
@@ -547,12 +546,12 @@ class ConfigLoader:
             update_mode = _get_nested(config, ['update', 'mode']) if update_enabled else "Non"
             option_value("Mise à jour", f"{update_mode}", important=update_enabled)
             
-            print(f"\n{Fore.GREEN}{BRIGHT}Configuration terminée avec succès !{Style.RESET_ALL}")
+            print(f"\n{SUCCESS_COLOR}{HIGHLIGHT_STYLE}Configuration terminée avec succès !{RESET_STYLE}")
             
         except KeyboardInterrupt:
             print("\nConfiguration interactive annulée.")
         except Exception as e:
-            print(f"\n{Fore.RED}Erreur config interactive: {e}{Fore.RESET}")
+            print(f"\n{ERROR_COLOR}Erreur config interactive: {e}{RESET_STYLE}")
             # Afficher le traceback complet uniquement en mode debug
             if debug_mode:
                 traceback.print_exc()
