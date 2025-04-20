@@ -80,8 +80,6 @@ class NvBuilder:
 
     def _display_config_summary(self):
         """Affiche un résumé de la configuration utilisée pour le build."""
-        # Définir des alias de couleurs pour une meilleure lisibilité
-        
         # Extraction des informations principales
         content_dir = self.config.get('content', './content')
         output_path = self.config.get('output', {}).get('path', 'autoextract.sh')

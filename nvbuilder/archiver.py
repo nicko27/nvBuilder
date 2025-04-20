@@ -15,16 +15,14 @@ import sys # Pour sys.stdout.write
 from .metadata import MetadataManager
 from .utils import calculate_checksum, check_exclusion, get_absolute_path
 from .exceptions import ArchiveError
-try:
-    from colorama import Fore, Style, init as colorama_init
-    colorama_init()  # Initialiser ici aussi au cas où __main__ ne serait pas appelé
-except ImportError:
-    # Créer des substituts vides si colorama n'est pas là
-    class DummyColorama:
-        def __getattr__(self, name): return ""
-    Fore = Style = DummyColorama()
-    # Définir RESET_ALL comme chaîne vide pour éviter erreurs
-    Style.RESET_ALL = ""
+
+# Import des couleurs sémantiques
+from .colors import (
+    ERROR_COLOR, SUCCESS_COLOR, WARNING_COLOR, INFO_COLOR, DETAIL_COLOR,
+    UPDATE_COLOR, DEBUG_COLOR, HEADER_COLOR, BANNER_COLOR, FILENAME_COLOR,
+    PATH_COLOR, OPTION_COLOR, KEY_COLOR, VALUE_COLOR, 
+    HIGHLIGHT_STYLE, SUBTLE_STYLE, RESET_STYLE
+)
 
 logger = logging.getLogger("nvbuilder")
 
@@ -38,14 +36,6 @@ class Archiver:
         self.debug_mode = config.get('debug_mode', False)
 
     def create(self) -> Tuple[Path, str, str, str]:
-        BLUE = Fore.BLUE
-        GREEN = Fore.GREEN
-        YELLOW = Fore.YELLOW
-        CYAN = Fore.CYAN
-        MAGENTA = Fore.MAGENTA
-        BRIGHT = Style.BRIGHT
-        DIM = Style.DIM
-        RESET = Style.RESET_ALL   
         """Crée l'archive tar compressée (ou non)."""
         content_dir_str = self.config.get('content', './content')
         config_dir = self.config.get('_config_dir', Path('.'))
@@ -100,7 +90,7 @@ class Archiver:
         if self.debug_mode:
             logger.info(f"Création archive '{archive_path.name}' ({details})")
         else:
-            print(f"{BLUE}{BRIGHT}Archivage en cours...  ", end=" ", flush=True)
+            print(f"{INFO_COLOR}{HIGHLIGHT_STYLE}Archivage en cours...  ", end=" ", flush=True)
 
         try:
             exclude_patterns = self.config['exclude']['patterns']
@@ -168,7 +158,7 @@ class Archiver:
                                 logger.warning(f"Ajout échoué '{f_rel}': {e}")
 
             if not self.debug_mode:
-                print(" Terminé.", flush=True)
+                print(f" {SUCCESS_COLOR}Terminé.{RESET_STYLE}", flush=True)
 
             size_mb = total_size / (1024*1024)
             excluded_count = len(self.metadata.get('files_excluded', []))
@@ -196,7 +186,7 @@ class Archiver:
 
         except Exception as e:
             if not self.debug_mode:
-                print(f"{Fore.RED} ERREUR{Style.RESET_ALL}")
+                print(f"{ERROR_COLOR} ERREUR{RESET_STYLE}")
             self.cleanup()
             raise ArchiveError(f"Erreur création archive tar: {e}") from e
 

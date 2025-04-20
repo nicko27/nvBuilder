@@ -12,14 +12,13 @@ from .constants import TEMPLATE_FILENAME, ARCHIVE_MARKER
 from .utils import read_file_binary, get_absolute_path
 from .exceptions import TemplateError, BuildProcessError
 
-try: 
-    from colorama import Fore, Style
-except ImportError: 
-    class DummyColorama: 
-        def __getattr__(self, name): 
-            return ""
-    Fore = Style = DummyColorama()
-    Style.RESET_ALL = ""
+# Import des couleurs sémantiques
+from .colors import (
+    ERROR_COLOR, SUCCESS_COLOR, WARNING_COLOR, INFO_COLOR, DETAIL_COLOR,
+    UPDATE_COLOR, DEBUG_COLOR, HEADER_COLOR, BANNER_COLOR, FILENAME_COLOR,
+    PATH_COLOR, OPTION_COLOR, KEY_COLOR, VALUE_COLOR, 
+    HIGHLIGHT_STYLE, SUBTLE_STYLE, RESET_STYLE
+)
 
 logger = logging.getLogger("nvbuilder")
 
@@ -122,14 +121,6 @@ class ScriptGenerator:
             raise e
 
     def _encode_archive(self, archive_path: Path) -> bytes:
-        BLUE = Fore.BLUE
-        GREEN = Fore.GREEN
-        YELLOW = Fore.YELLOW
-        CYAN = Fore.CYAN
-        MAGENTA = Fore.MAGENTA
-        BRIGHT = Style.BRIGHT
-        DIM = Style.DIM
-        RESET = Style.RESET_ALL          
         """
         Lit l'archive et l'encode en Base64.
         
@@ -145,7 +136,7 @@ class ScriptGenerator:
         if self.debug_mode:
             logger.info(f"Encodage Base64 de '{archive_path.name}'...")
         else:
-            print(f"{BLUE}{BRIGHT}Préparation de l'archive...  ", end=" ", flush=True)
+            print(f"{INFO_COLOR}{HIGHLIGHT_STYLE}Préparation de l'archive...  ", end=" ", flush=True)
         
         try:
             # Lire l'archive en binaire
@@ -158,16 +149,14 @@ class ScriptGenerator:
             size_mb = len(encoded_data)/1024/1024
             
             if self.debug_mode:
-                logger.info(f"•  Encodage Base64 {Fore.GREEN}OK{Style.RESET_ALL} (Taille: {size_mb:.2f} Mo)")
+                logger.info(f"•  Encodage Base64 {SUCCESS_COLOR}OK{RESET_STYLE} (Taille: {size_mb:.2f} Mo)")
             else:
-                print(f"{Fore.GREEN}OK{Style.RESET_ALL}")
+                print(f"{SUCCESS_COLOR}OK{RESET_STYLE}")
             
             return encoded_data
             
         except Exception as e:
             raise BuildProcessError(f"Erreur encodage B64 {archive_path}: {e}") from e
-
-# Ajout dans la méthode _prepare_replacements de la classe ScriptGenerator
 
     def _prepare_replacements(self, archive_original_filename: str, 
                             tar_command_flags: str, bash_snippets: Dict[str, str]) -> Dict[str, str]:
@@ -294,18 +283,10 @@ class ScriptGenerator:
         Raises:
             BuildProcessError: Si l'écriture échoue
         """
-        BLUE = Fore.BLUE
-        GREEN = Fore.GREEN
-        YELLOW = Fore.YELLOW
-        CYAN = Fore.CYAN
-        MAGENTA = Fore.MAGENTA
-        BRIGHT = Style.BRIGHT
-        DIM = Style.DIM
-        RESET = Style.RESET_ALL  
         if self.debug_mode:
             logger.info(f"Écriture script -> {output_path}")
         else:
-            print(f"{BRIGHT}{BLUE}Génération du script final...", end=" ", flush=True)
+            print(f"{INFO_COLOR}{HIGHLIGHT_STYLE}Génération du script final...", end=" ", flush=True)
         
         try:
             # Créer les répertoires parents si nécessaire
@@ -336,9 +317,9 @@ class ScriptGenerator:
             os.chmod(output_path, 0o755)
             
             if self.debug_mode:
-                logger.info(f"•  Écriture script {Fore.GREEN}OK{Style.RESET_ALL}")
+                logger.info(f"•  Écriture script {SUCCESS_COLOR}OK{RESET_STYLE}")
             else:
-                print(f"{Fore.GREEN}OK{Style.RESET_ALL}")
+                print(f"{SUCCESS_COLOR}OK{RESET_STYLE}")
             
         except Exception as e:
             if self.debug_mode:
